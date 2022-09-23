@@ -1,0 +1,55 @@
+// This chip extracts register operands for Shift (immediate), add, subtract, move, and compare instructions.
+// As described in A6.2 SiASMC instructions have an opcode of 00xxxx
+
+CHIP OpsSASMC {
+    IN  instruction[14];
+    OUT Rd[3], Rm[3];
+    // Rn[3], WriteReg, WriteMem, imm3[3], imm5[5], imm8[8];
+
+    PARTS:
+    // According to table in A6.2.1 bit 9-13 determine the instruction type.
+    // Those 4 bits are used as a selector between instructions for the
+    // various operands.
+
+    // Rd (destination register)
+    Mux8Way<3>(
+        in000=instruction[0..2],            // LSL
+        in001=instruction[0..2],            // LSR
+        in010=instruction[0..2],            // ASR
+        in011=instruction[0..2],            // ADD register, SUB register,
+                                            // ADD 3-bit imm, SUB 3-bit imm
+        in100=instruction[8..10],           // MOV
+        in101=false,                        // CMP - not used
+        in110=instruction[8..10],           // Add 8-bit imm
+        in111=instruction[8..10],           // SUB 8-bit imm
+        sel=instruction[11..13],
+        out=Rd
+    );
+
+    // imm8 
+    Mux8Way<8>(
+        in000=instruction[0..2],            // LSL
+        in001=instruction[0..2],            // LSR
+        in010=instruction[0..2],            // ASR
+        in011=instruction[0..2],            // ADD register, SUB register,
+                                            // ADD 3-bit imm, SUB 3-bit imm
+        in100=instruction[8..10],           // MOV
+        in101=false,                        // CMP - not used
+        in110=instruction[8..10],           // Add 8-bit imm
+        in111=instruction[8..10],           // SUB 8-bit imm
+        sel=instruction[11..13],
+        out=Rd
+    );
+
+    // Rm (operand)
+    // MOV, CMP, Add 8-bit and Sub 8-bit do not use Rm
+    Mux4Way<3>(
+        in00=instruction[3..5],            // LSL
+        in01=instruction[3..5],            // LSR
+        in10=instruction[3..5],            // ASR
+        in11=instruction[6..8],            // ADD register, SUB register,
+                                           // ADD 3-bit imm, SUB 3-bit imm (Rm unused)
+        sel=instruction[11..12],
+        out=Rm
+    );
+}

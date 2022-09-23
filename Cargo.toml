@@ -1,0 +1,34 @@
+[package]
+name = "nand2vhdl"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+clap = { version = "3.2.6", features = ["derive"] }
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+petgraph = { version = "0.6.2", features = ["serde-1"] }
+bitvec = "1.0.1"
+more-asserts = "0.3.0"
+wasm-bindgen = "0.2.82"
+rust-embed = "6.4.0"
+tempfile = "3.3.0"
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.6", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.13"
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

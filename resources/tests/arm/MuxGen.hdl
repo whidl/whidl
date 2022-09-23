@@ -1,0 +1,10 @@
+CHIP MuxGen<X> {
+    IN in0[X], in1[X], sel;
+    OUT out[X];
+
+    PARTS:
+
+    FOR i IN 0 TO X-1 GENERATE {
+        Mux(in0=in0[i], in1=in1[i], sel=sel, out=out[i]);
+    }
+}

@@ -1,0 +1,13 @@
+CHIP LightsOn {
+    IN in;
+    OUT LEDR[10], HEX0[7], HEX1[7], HEX2[7], HEX3[7], HEX4[7], HEX5[7];
+
+    PARTS:
+    BufferGen<10>(in=true, out=LEDR);
+    BufferGen<7>(in=false, out=HEX0);
+    BufferGen<7>(in=false, out=HEX1);
+    BufferGen<7>(in=false, out=HEX2);
+    BufferGen<7>(in=false, out=HEX3);
+    BufferGen<7>(in=false, out=HEX4);
+    BufferGen<7>(in=false, out=HEX5);
+}

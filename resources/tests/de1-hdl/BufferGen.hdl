@@ -1,0 +1,10 @@
+// Hack until simulator supports a real buffer chip.
+
+CHIP BufferGen<W> {
+    IN in[W];
+    OUT out[W];
+
+    PARTS:
+    NotGen<W>(in=in, out=notin);
+    NotGen<W>(in=notin, out=out);
+}

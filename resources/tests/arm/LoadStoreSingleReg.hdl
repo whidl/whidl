@@ -1,0 +1,43 @@
+CHIP LoadStoreSingleReg {
+    IN  instruction[16];
+    OUT Rm[3], Rn[3], Rt[3], WriteMem;
+
+    PARTS:
+
+    // Dummy component to make compiler happy. Limitation of compiler
+    // is that any component using a signal must use all of the signal.
+    // Should fix that.
+    Mux16(a=instruction[0..15], b=instruction, sel=true, out=dummy);
+
+    // Destination
+    Mux4Way16(
+        a[0..2]=instruction[0..2],
+        a[3..13]=false,
+        b[0..2]=instruction[0..2],
+        b[3..13]=false,
+        c[0..2]=instruction[0..2],
+        c[3..13]=false,
+        d[0..2]=instruction[8..10],
+        d[3..13]=false,
+        sel=instruction[12..13],
+        out[0..2]=Rd
+    );
+
+    // Rn
+    Mux(a=true, b=instruction[3], sel=true, out=Rn[0]);
+    Mux(a=true, b=instruction[4], sel=true, out=Rn[1]);
+    Mux(a=true, b=instruction[5], sel=true, out=Rn[2]);
+
+    // Rm
+    Mux(a=true, b=instruction[6], sel=true, out=Rm[0]);
+    Mux(a=true, b=instruction[7], sel=true, out=Rm[1]);
+    Mux(a=true, b=instruction[8], sel=true, out=Rm[2]);
+
+    // Rt
+    Mux(a=true, b=instruction[0], sel=true, out=Rt[0]);
+    Mux(a=true, b=instruction[1], sel=true, out=Rt[1]);
+    Mux(a=true, b=instruction[2], sel=true, out=Rt[2]);
+
+    // Writes to memory?
+    Mux(a=true, b=true, sel=true, out=WriteMem); 
+}

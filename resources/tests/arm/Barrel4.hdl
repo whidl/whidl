@@ -1,0 +1,37 @@
+CHIP Barrel4 {
+    IN x[4], shift[2];
+    OUT y[4];
+
+    PARTS:
+    // Shift 0
+    Mux(a=false, b=x[0], sel=true, out=shift0[0]);
+    Mux(a=false, b=x[1], sel=true, out=shift0[1]);
+    Mux(a=false, b=x[2], sel=true, out=shift0[2]);
+    Mux(a=false, b=x[3], sel=true, out=shift0[3]);
+
+
+    // Shift 1
+    Mux(a=false, b=x[0], sel=true, out=shift1[1]);
+    Mux(a=false, b=x[1], sel=true, out=shift1[2]);
+    Mux(a=false, b=x[2], sel=true, out=shift1[3]);
+    Mux(a=false, b=x[3], sel=true, out=shift1[0]);
+
+
+    // Shift 2
+    Mux(a=false, b=x[0], sel=true, out=shift2[2]);
+    Mux(a=false, b=x[1], sel=true, out=shift2[3]);
+    Mux(a=false, b=x[2], sel=true, out=shift2[0]);
+    Mux(a=false, b=x[3], sel=true, out=shift2[1]);
+
+    // Shift 3
+    Mux(a=false, b=x[0], sel=true, out=shift3[3]);
+    Mux(a=false, b=x[1], sel=true, out=shift3[0]);
+    Mux(a=false, b=x[2], sel=true, out=shift3[1]);
+    Mux(a=false, b=x[3], sel=true, out=shift3[2]);
+
+    Mux4Way(a=shift0[0], b=shift1[0], c=shift2[0], d=shift3[0], sel=shift, out=y[0]);
+    Mux4Way(a=shift0[1], b=shift1[1], c=shift2[1], d=shift3[1], sel=shift, out=y[1]);
+    Mux4Way(a=shift0[2], b=shift1[2], c=shift2[2], d=shift3[2], sel=shift, out=y[2]);
+    Mux4Way(a=shift0[3], b=shift1[3], c=shift2[3], d=shift3[3], sel=shift, out=y[3]);
+}
+

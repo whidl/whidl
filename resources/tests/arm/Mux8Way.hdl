@@ -1,0 +1,13 @@
+CHIP Mux8Way<W> {
+    IN in000[W], in001[W], in010[W], in011[W],
+       in100[W], in101[W], in110[W], in111[W],
+       sel[3];
+    OUT out[W];
+
+    PARTS:
+
+    Mux4Way<W>(in00=in000, in01=in001, in10=in010, in11=in011, sel=sel[0..1], out=MuxLow);
+    Mux4Way<W>(in00=in100, in01=in101, in10=in110, in11=in111, sel=sel[0..1], out=MuxHigh);
+
+    MuxGen<W>(in0=MuxLow, in1=MuxHigh, sel=sel[2], out=out);
+}

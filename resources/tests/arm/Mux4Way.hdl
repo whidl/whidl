@@ -1,0 +1,9 @@
+CHIP Mux4Way<W> {
+    IN in00[W], in01[W], in10[W], in11[W], sel[2];
+    OUT out[W];
+
+    PARTS:
+    MuxGen<W>(in0=in00, in1=in01, sel=sel[0], out=MuxLow);
+    MuxGen<W>(in0=in10, in1=in11, sel=sel[0], out=MuxHigh);
+    MuxGen<W>(in0=MuxLow, in1=MuxHigh, sel=sel[1], out=out);
+}

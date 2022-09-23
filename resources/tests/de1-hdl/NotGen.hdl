@@ -1,0 +1,9 @@
+CHIP NotGen<X> {
+    IN in[X];
+    OUT out[X];
+
+    PARTS:
+    FOR i IN 0 TO X-1 GENERATE {
+        Not(in=in[i], out=out[i]);
+    }
+}

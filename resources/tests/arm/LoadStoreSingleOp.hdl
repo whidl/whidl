@@ -1,0 +1,22 @@
+CHIP LoadStoreSingleOp {
+    IN  instruction[14], Rm[16], Rn[16];
+    OUT result[16];
+
+    PARTS:
+
+    Mux8Way16(
+        a=false,
+        b=false,
+        c=false,
+        d=false,
+        e=mov_out,
+        f=false,
+        g=false,
+        h=false,
+        sel=instruction[11..13],
+        out=out
+    );
+
+    // Mov 8-bit immediate
+    Mux<16>(a[0..7]=instruction[0..7], a[8..15]=false, b=false, sel=false, out=mov_out);
+}

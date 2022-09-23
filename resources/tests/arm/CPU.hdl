@@ -1,0 +1,34 @@
+CHIP CPU {
+    IN instruction[16];
+
+    OUT outM[16],        // Memory bus output
+       writeM,          // Write to M? 
+       addressM[15];   // Address in data memory (of M)
+
+    PARTS:
+
+    Mux16(a=load_store_single_address, b=none, out[0..14]=addressM, sel=true);
+    Mux(a=siasmc_write, b=load_store_single_write, out=writeM, sel=instruction[14]);
+    Mux16(a=siasmc_out, b=load_store_single_out, out=outM, sel=instruction[14]);
+
+    // Lo Registers
+    RAM8(in=reg_in, load=reg_write, address=reg_addr, out=reg_out);
+
+
+    // Destination register
+    //Mux4Way(a=siasmc_dest[0], b=none, c=none, d=none , sel=instruction[14..15], out=reg_addr[0]);
+    //Mux4Way(a=siasmc_dest[1], b=none, c=none, d=none , sel=instruction[14..15], out=reg_addr[1]);
+    //Mux4Way(a=siasmc_dest[2], b=none, c=none, d=none , sel=instruction[14..15], out=reg_addr[2]);
+    
+
+    // SiASMC
+    //SiASMCReg(instruction=instruction[0..13], Rm=siasmc_rm, Rn=siasmc_rn, Rd=siasmc_dest, WriteReg=siasmc_load, WriteMem=siasmc_write);
+    //SiASMCOp(instruction=instruction[0..13], Rm=siasmc_rm_data, Rn=siasmc_rn_data, out=siasmc_out);
+
+    // 3. AddressM is m + n
+    Add16(a=load_store_single_m, b=load_store_single_n, out=load_store_single_address);
+
+    // 4. outM is t
+    Mux16(a=load_store_single_t, b=load_store_single_t, sel=none, out=t);
+    Mux16(a=t, b=t, sel=none, out=load_store_single_out);
+}
