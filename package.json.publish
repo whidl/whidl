@@ -1,0 +1,19 @@
+{
+  "name": "nand2vhdl",
+  "version": "0.1.0",
+  "files": [
+    "nand2vhdl_bg.wasm",
+    "nand2vhdl.js",
+    "nand2vhdl.d.ts"
+  ],
+  "module": "nand2vhdl.js",
+  "types": "nand2vhdl.d.ts",
+  "sideEffects": false
+  "publishConfig": {
+    "registry":"https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cs314f22/nand2vhdl"
+  }
+}

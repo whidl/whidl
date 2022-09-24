@@ -27,6 +27,8 @@ jobs:
       - name: Publish pkg 
         run: |
           cd pkg
+          rm package.json
+          cp ../package.json.publish package.json
           npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
