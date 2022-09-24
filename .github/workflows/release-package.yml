@@ -13,14 +13,19 @@ jobs:
       packages: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Build pkg
+        run: |
+          cargo install wasm-pack
+          wasm-pack build --target web
+      - name: Publish pkg
+        uses: actions/setup-node@v3
         with:
           node-version: 16
           registry-url: https://npm.pkg.github.com/
-      - run: cargo install wasm-pack
-      - run: wasm-pack build --target web
-      - run: echo "@defreez:registry=https://npm.pkg.github.com" > pkg/.npmrc
-      - run: cd pkg && npm publish
+        run: |
+          cd pkg
+          npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
