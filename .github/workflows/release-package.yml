@@ -1,0 +1,30 @@
+name: Node.js Package
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs:
+      using: 'docker'
+      image: 'Dockerfile'
+    steps:
+      - uses: actions/checkout@v3
+      - run: wasm-pack build --target web
+  publish-gpr:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          registry-url: https://npm.pkg.github.com/
+      - run: echo "@defreez:registry=https://npm.pkg.github.com" > pkg/.npmrc
+      - run: cd pkg && pkg npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
