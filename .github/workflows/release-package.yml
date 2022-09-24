@@ -1,7 +1,4 @@
 name: Node.js Package
-runs:
-  using: 'docker'
-  image: 'Dockerfile'
 
 on:
   release:
