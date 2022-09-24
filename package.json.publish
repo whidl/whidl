@@ -1,5 +1,5 @@
 {
-  "name": "nand2vhdl",
+  "name": "@cs314f22/nand2vhdl",
   "version": "0.1.0",
   "files": [
     "nand2vhdl_bg.wasm",
