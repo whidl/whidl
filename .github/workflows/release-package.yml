@@ -21,6 +21,6 @@ jobs:
       - run: cargo install wasm-pack
       - run: wasm-pack build --target web
       - run: echo "@defreez:registry=https://npm.pkg.github.com" > pkg/.npmrc
-      - run: cd pkg && pkg npm publish
+      - run: cd pkg && npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
