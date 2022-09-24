@@ -1,4 +1,7 @@
 name: Node.js Package
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
 
 on:
   release:
@@ -6,9 +9,6 @@ on:
 
 jobs:
   build:
-    runs:
-      using: 'docker'
-      image: 'Dockerfile'
     steps:
       - uses: actions/checkout@v3
       - run: wasm-pack build --target web
