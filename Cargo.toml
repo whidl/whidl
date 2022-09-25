@@ -1,5 +1,5 @@
 [package]
-name = "nand2vhdl"
+name = "whidl"
 version = "0.1.0"
 edition = "2021"
 

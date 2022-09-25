@@ -1,19 +1,19 @@
 {
-  "name": "@defreez/nand2vhdl",
+  "name": "@whidl/whidl",
   "version": "0.1.0",
   "files": [
-    "nand2vhdl_bg.wasm",
-    "nand2vhdl.js",
-    "nand2vhdl.d.ts"
+    "whidl_bg.wasm",
+    "whidl.js",
+    "whidl.d.ts"
   ],
-  "module": "nand2vhdl.js",
-  "types": "nand2vhdl.d.ts",
+  "module": "whidl.js",
+  "types": "whidl.d.ts",
   "sideEffects": false,
   "publishConfig": {
     "registry":"https://npm.pkg.github.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/defreez/nand2vhdl.git"
+    "url": "https://github.com/whidl/whidl.git"
   }
 }

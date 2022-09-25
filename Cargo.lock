@@ -233,23 +233,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5474f8732dc7e0635ae9df6595bcd39cd30e3cfe8479850d4fa3e69306c19712"
 
 [[package]]
-name = "nand2vhdl"
-version = "0.1.0"
-dependencies = [
- "bitvec",
- "clap",
- "console_error_panic_hook",
- "more-asserts",
- "petgraph",
- "rust-embed",
- "serde",
- "serde_json",
- "tempfile",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -623,6 +606,23 @@ checksum = "ed055ab27f941423197eb86b2035720b1a3ce40504df082cac2ecc6ed73335a1"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "whidl"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "clap",
+ "console_error_panic_hook",
+ "more-asserts",
+ "petgraph",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
