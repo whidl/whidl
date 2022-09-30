@@ -160,7 +160,7 @@ impl BusMap {
         let current = self.buses.get(&bus.name).expect(msg);
 
         let range = match &bus.range {
-            None => (0..current.len()),
+            None => 0..current.len(),
             Some(r) => r.clone(),
         };
 
@@ -225,7 +225,7 @@ impl BusMap {
         let current = self.buses.get_mut(&bus.name).unwrap();
 
         let range = match &bus.range {
-            None => (0..values.len()),
+            None => 0..values.len(),
             Some(r) => {
                 if r.len() != values.len() {
                     panic!("busmap insert: inconsistent widths");

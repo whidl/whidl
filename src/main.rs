@@ -26,6 +26,7 @@ use std::ptr;
 use std::rc::Rc;
 
 #[derive(ArgParser)]
+#[clap(version)]
 struct Cli {
     #[clap(subcommand)]
     command: Commands,
