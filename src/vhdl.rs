@@ -458,7 +458,7 @@ pub fn synth_vhdl(
     for (component_counter, part) in hdl.parts.iter().enumerate() {
         match part {
             Part::Component(c) => {
-                let component_hdl = get_hdl(&c.name.value, None, provider).unwrap();
+                let component_hdl = get_hdl(&c.name.value, provider).unwrap();
                 let generic_map = generic_map(&component_hdl, c);
 
                 let port_map = c
@@ -485,7 +485,7 @@ pub fn synth_vhdl(
                     .enumerate()
                     .map(|(i, c)| {
                         let mut body_vhdl = String::new();
-                        let component_hdl = get_hdl(&c.name.value, None, provider).unwrap();
+                        let component_hdl = get_hdl(&c.name.value, provider).unwrap();
                         let generic_map = generic_map(&component_hdl, c);
                         let port_map = c
                             .mappings
@@ -555,14 +555,14 @@ fn generate_component_definition(
         return Ok(HashMap::new());
     }
 
-    let component_hdl = get_hdl(&component.name.value, None, provider).unwrap();
+    let component_hdl = get_hdl(&component.name.value, provider).unwrap();
     synth_vhdl(&component_hdl, provider)
 }
 
 /// Generates the declaration for a component that can be included in the VHDL.
 /// of another chip that uses this component.
 fn generate_component_declaration(component: &Component, provider: &Rc<dyn HdlProvider>) -> String {
-    let component_hdl = get_hdl(&component.name.value, None, provider).unwrap();
+    let component_hdl = get_hdl(&component.name.value, provider).unwrap();
     let mut component_decl = String::new();
     writeln!(
         &mut component_decl,

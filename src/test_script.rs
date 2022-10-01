@@ -194,6 +194,7 @@ pub fn run_test(test_script_path: &str) {
                 }
                 Instruction::Eval => {
                     outputs = simulator.simulate(&inputs).expect("simulation failure");
+                    print!(".");
                 }
                 Instruction::Output => {
                     assert_le!(expected[cmp_idx], outputs.clone(), "Step: {}", cmp_idx + 1);
@@ -209,6 +210,8 @@ pub fn run_test(test_script_path: &str) {
             }
         }
     }
+
+    println!("OK!");
 }
 
 fn read_test(path: &PathBuf) -> String {

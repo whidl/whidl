@@ -160,11 +160,9 @@ pub struct PortMapping {
 
 /// Looks up chip definition for a chip.
 /// name is the name of the chip, not including .hdl extension
-/// base is the director yprefix to use when looking for HDL files
 /// provider is responsible for retrieving the HDL file (provider will have its own base path)
 pub fn get_hdl(
     name: &str,
-    prefix: Option<PathBuf>,
     provider: &Rc<dyn HdlProvider>,
 ) -> Result<ChipHDL, N2VError> {
     if name.to_lowercase() == "nand" {
@@ -215,10 +213,7 @@ pub fn get_hdl(
     }
 
     let filename = String::from(name) + ".hdl";
-    let path = match prefix {
-        Some(p) => p.with_file_name(filename),
-        None => PathBuf::from(filename),
-    };
+    let path = PathBuf::from(filename);
 
     let contents = provider.get_hdl(path.to_str().unwrap())?;
     let mut scanner = Scanner::new(contents.as_str(), path);

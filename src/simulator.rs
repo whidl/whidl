@@ -381,7 +381,6 @@ impl Chip {
         if self.hdl.is_none() {
             return Ok(());
         }
-        let hdl = self.hdl.as_ref().unwrap();
 
         // Where each bit of the signal source comes from.
         let mut signal_sources: HashMap<String, Vec<Option<(NodeIndex, Bus)>>> = HashMap::new();
@@ -415,7 +414,7 @@ impl Chip {
         // Also checks if true/false literals are used.
         let mut created_components: Vec<NodeIndex> = Vec::new();
         for (_, part) in self.components.iter().enumerate() {
-            let part_hdl = get_hdl(&part.name.value, hdl.path.clone(), &self.hdl_provider)?;
+            let part_hdl = get_hdl(&part.name.value, &self.hdl_provider)?;
 
             // Convert generics with vars to concrete generics for component.
             // e.g. Mux<W> needs to become Mux<4> if W=4. At this point
@@ -579,7 +578,7 @@ impl Chip {
         };
 
         for (part_idx, part) in self.components.iter().enumerate() {
-            let part_hdl = get_hdl(&part.name.value, hdl.path.clone(), &self.hdl_provider)?;
+            let part_hdl = get_hdl(&part.name.value, &self.hdl_provider)?;
 
             // Handle in ports from signals to components
             for m in &part.mappings {
@@ -1224,7 +1223,7 @@ pub fn infer_widths(
     // with every mapping.
     for _ in 0..2 {
         for part in components {
-            let component_hdl = get_hdl(&part.name.value, None, provider)?;
+            let component_hdl = get_hdl(&part.name.value, provider)?;
             // Convert generics with vars to concrete generics for component.
             // e.g. Mux<W> needs to become Mux<4> if W=4. At this point
             // we need actual bus widths.
