@@ -126,8 +126,13 @@ fn main() {
                     .unwrap(),
             );
             let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())
-                .expect("Chip creation error");
+            let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new()) {
+                Ok(x) => x,
+                Err(x) => {
+                    println!("{}", x);
+                    std::process::exit(1);
+                }
+            };
 
             let mut simulator = Simulator::new(chip);
 

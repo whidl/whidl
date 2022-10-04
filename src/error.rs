@@ -29,7 +29,14 @@ impl std::fmt::Display for N2VError {
         #[allow(unused_must_use)]
         match &self.kind {
             ErrorKind::ParseError(t) => {
-                let file = File::open(t.path.clone()).unwrap();
+                let file = match File::open(t.path.clone()) {
+                    Ok(x) => x,
+                    Err(_) => {
+                        writeln!(f, "In : {:?}", t.path.clone());
+                        return writeln!(f, "Error: {}", self.msg);
+                    } 
+                };
+
                 let n2 = t.line;
                 let line_num: usize = n2.try_into().unwrap();
                 let l = io::BufReader::new(file).lines().nth(line_num - 1);
