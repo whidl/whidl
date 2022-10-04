@@ -98,6 +98,7 @@ impl<'a> Scanner<'a> {
         };
 
         while token.is_none() && self.source_chars.peek().is_some() {
+            self.col += 1;
             token = match self.source_chars.next() {
                 None => None,
                 Some(c) => match c {
@@ -208,7 +209,7 @@ impl<'a> Scanner<'a> {
                     }),
                     '\n' => {
                         self.line += 1;
-                        self.col = 1;
+                        self.col = 0;
                         None
                     }
                     ' ' | '\t' | '\r' => None,
@@ -259,7 +260,6 @@ impl<'a> Scanner<'a> {
                 },
             }
         }
-        self.col += 1;
         token
     }
 
@@ -270,6 +270,7 @@ impl<'a> Scanner<'a> {
                 None => break,
                 Some('\n') => {
                     self.line += 1;
+                    self.col = 0;
                     break;
                 }
                 _ => {}
@@ -280,6 +281,7 @@ impl<'a> Scanner<'a> {
     fn finish_multi_comment(&mut self) {
         loop {
             let next = self.source_chars.next();
+            self.col += 1;
 
             match next {
                 None => {
@@ -287,6 +289,7 @@ impl<'a> Scanner<'a> {
                 }
                 Some('\n') => {
                     self.line += 1;
+                    self.col = 0;
                 }
                 Some('*') => match self.source_chars.peek() {
                     None => {
@@ -310,6 +313,7 @@ impl<'a> Scanner<'a> {
             if c.is_numeric() {
                 lexeme.push(*c);
                 self.source_chars.next();
+                self.col += 1;
             } else {
                 break;
             }
@@ -331,6 +335,7 @@ impl<'a> Scanner<'a> {
             if c.is_alphanumeric() || c == &'_' {
                 lexeme.push(*c);
                 self.source_chars.next();
+                self.col += 1;
             } else {
                 break;
             }

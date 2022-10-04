@@ -13,7 +13,7 @@ mod test_script;
 mod vhdl;
 
 use crate::parser::*;
-use crate::simulator::{Chip, Simulator};
+use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_script::run_test;
 use clap::Parser as ArgParser;
 use clap::Subcommand;
@@ -116,7 +116,6 @@ fn main() {
                 }
             };
 
-
             let base_path = String::from(
                 hdl.path
                     .as_ref()
@@ -134,13 +133,33 @@ fn main() {
 
             // Get all input ports.
             // Set all input ports to false and simulate.
-            let inputs = simulator
-            .chip
-            .get_port_values_for_direction(PortDirection::In);
+            let mut inputs = simulator
+                .chip
+                .get_port_values_for_direction(PortDirection::In);
+
+            // TODO: make it easier to get full bus out of busmap
+            for sn in inputs.signals() {
+                let sig_width = inputs.get_width(&sn);
+                let usig_width = sig_width.as_ref().unwrap_or(&0);
+                let b = Bus {
+                    name: sn,
+                    range: match sig_width {
+                        None => None,
+                        Some(x) => Some(0..x),
+                    },
+                };
+                inputs.insert_option(&b, vec![Some(false); *usig_width]);
+            }
 
             // We don't care what the outputs are, just want to simulate
             // and trigger any dynamic errors.
-            let _ = simulator.simulate(&inputs);
+            match simulator.simulate(&inputs) {
+                Ok(_) => {}
+                Err(x) => {
+                    println!("{}", x);
+                    std::process::exit(1);
+                }
+            };
         }
         Commands::Test { test_file } => {
             run_test(test_file);

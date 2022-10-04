@@ -233,7 +233,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let t = self.scanner.next();
         match &t {
             None => Err(N2VError {
-                msg: format!("Early end of file expected {:?}", tt),
+                msg: format!("Early end of file, expected {:?}", tt),
                 kind: ErrorKind::ParseError(Token {
                     lexeme: String::from(""),
                     path: self.scanner.path.clone(),
@@ -248,7 +248,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 } else {
                     Err(N2VError {
                         msg: format!(
-                            "I did not expect to see `{}`. I expected to see a kind of {:?}",
+                            "I did not expect to see `{}`. I expected to see {:?}",
                             t.lexeme, tt
                         ),
                         kind: ErrorKind::ParseError(t.clone()),
@@ -346,10 +346,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Unexpected end of file. Expected number, comma, or right angle."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
@@ -400,19 +397,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 Some(t) => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Expected identifier, comma, or right angle"),
                         kind: ErrorKind::ParseError(t.clone()),
                     });
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Unexpected end of file. Expected identifier, comma, or right angle."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
@@ -459,19 +450,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 Some(t) => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Expected identifier, comma, or semicolon."),
                         kind: ErrorKind::ParseError(t.clone()),
                     });
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Unexpected end of file. Expected identifier, comma, or semicolon."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
@@ -513,13 +498,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 Some(t) => {
                     return Err(N2VError {
-                        msg: String::from("Expected identifier, number, comma, or right angle"),
+                        msg: String::from("Expected identifier, FOR, or right curly."),
                         kind: ErrorKind::ParseError(t.clone()),
                     });
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!("Expected identifier, number, comma, or right angle"),
+                        msg: String::from("Unexpected end of file. Expected identifier, FOR, or right curly."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
@@ -557,13 +542,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 Some(t) => {
                     return Err(N2VError {
-                        msg: format!("Expected something else"),
+                        msg: String::from("Expected Identifier or right curly."),
                         kind: ErrorKind::ParseError(t.clone()),
                     });
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!("Early end of file."),
+                        msg: String::from("Unexpected end of file. Expected identifier or right curly."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
@@ -729,7 +714,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                             let found = found_t.lexeme.clone();
                             return Err(N2VError {
                                 msg: format!("Expected comma or right paren, found {}", found),
-                                kind: ErrorKind::ParseError(found_t.clone()),
+                                kind: ErrorKind::ParseError(found_t),
                             });
                         }
                     }
@@ -748,19 +733,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 Some(t) => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Expected comma, or right paren"),
                         kind: ErrorKind::ParseError(t.clone()),
                     });
                 }
                 None => {
                     return Err(N2VError {
-                        msg: format!(
-                            "Expected identifier, number, comma, or right angle, found {:?}",
-                            next
-                        ),
+                        msg: String::from("Unexpected end of file. Expected comma or right paren."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
                             path: self.scanner.path.clone(),
