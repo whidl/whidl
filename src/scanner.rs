@@ -29,6 +29,7 @@ pub enum TokenType {
     Generate,
     Plus,
     Minus,
+    Eof,
 }
 
 #[derive(Clone, Debug)]
@@ -36,12 +37,14 @@ pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
     pub line: u32,
+    pub start: usize,
     pub path: PathBuf,
 }
 
 pub struct Scanner<'a> {
     source_chars: std::iter::Peekable<Chars<'a>>,
     pub line: u32,
+    pub col: usize,
     keywords: HashMap<&'a str, TokenType>,
     peeked: Option<Token>,
     pub path: PathBuf,
@@ -66,6 +69,7 @@ impl<'a> Scanner<'a> {
         Scanner {
             source_chars,
             line: 1,
+            col: 1,
             keywords,
             peeked: None,
             path: source_path,
@@ -101,94 +105,110 @@ impl<'a> Scanner<'a> {
                         token_type: TokenType::LeftCurly,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '}' => Some(Token {
                         token_type: TokenType::RightCurly,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '(' => Some(Token {
                         token_type: TokenType::LeftParen,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     ')' => Some(Token {
                         token_type: TokenType::RightParen,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     ';' => Some(Token {
                         token_type: TokenType::Semicolon,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     ':' => Some(Token {
                         token_type: TokenType::Colon,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     ',' => Some(Token {
                         token_type: TokenType::Comma,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '[' => Some(Token {
                         token_type: TokenType::LeftBracket,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     ']' => Some(Token {
                         token_type: TokenType::RightBracket,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '<' => Some(Token {
                         token_type: TokenType::LeftAngle,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '>' => Some(Token {
                         token_type: TokenType::RightAngle,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '=' => Some(Token {
                         token_type: TokenType::Equal,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '.' => Some(Token {
                         token_type: TokenType::Dot,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '+' => Some(Token {
                         token_type: TokenType::Plus,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '-' => Some(Token {
                         token_type: TokenType::Minus,
                         lexeme: c.to_string(),
                         line: self.line,
+                        start: self.col,
                         path: self.path.clone(),
                     }),
                     '\n' => {
                         self.line += 1;
+                        self.col = 1;
                         None
                     }
                     ' ' | '\t' | '\r' => None,
@@ -198,6 +218,7 @@ impl<'a> Scanner<'a> {
                                 return Some(Token {
                                     lexeme: c.to_string(),
                                     line: self.line,
+                                    start: self.col,
                                     path: self.path.clone(),
                                     token_type: TokenType::Invalid,
                                 });
@@ -213,6 +234,7 @@ impl<'a> Scanner<'a> {
                             return Some(Token {
                                 lexeme: c.to_string(),
                                 line: self.line,
+                                start: self.col,
                                 path: self.path.clone(),
                                 token_type: TokenType::Invalid,
                             });
@@ -228,6 +250,7 @@ impl<'a> Scanner<'a> {
                             Some(Token {
                                 lexeme: c.to_string(),
                                 line: self.line,
+                                start: self.col,
                                 path: self.path.clone(),
                                 token_type: TokenType::Invalid,
                             })
@@ -236,6 +259,7 @@ impl<'a> Scanner<'a> {
                 },
             }
         }
+        self.col += 1;
         token
     }
 
@@ -295,6 +319,7 @@ impl<'a> Scanner<'a> {
             token_type: TokenType::Number,
             lexeme,
             line: self.line,
+            start: self.col,
             path: self.path.clone(),
         }
     }
@@ -311,10 +336,10 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.lexeme_to_identifier_or_keyword(lexeme, self.line)
+        self.lexeme_to_identifier_or_keyword(lexeme, self.line, self.col)
     }
 
-    fn lexeme_to_identifier_or_keyword(&self, lexeme: String, line: u32) -> Token {
+    fn lexeme_to_identifier_or_keyword(&self, lexeme: String, line: u32, col: usize) -> Token {
         let token_type = match self.keywords.get(lexeme.as_str()) {
             None => TokenType::Identifier,
             Some(t) => *t,
@@ -324,6 +349,7 @@ impl<'a> Scanner<'a> {
             token_type,
             lexeme,
             line,
+            start: col,
             path: self.path.clone(),
         }
     }

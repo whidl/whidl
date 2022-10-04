@@ -1,4 +1,4 @@
-use crate::error::N2VError;
+use crate::error::{ErrorKind, N2VError};
 use crate::expr::*;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
@@ -161,10 +161,7 @@ pub struct PortMapping {
 /// Looks up chip definition for a chip.
 /// name is the name of the chip, not including .hdl extension
 /// provider is responsible for retrieving the HDL file (provider will have its own base path)
-pub fn get_hdl(
-    name: &str,
-    provider: &Rc<dyn HdlProvider>,
-) -> Result<ChipHDL, N2VError> {
+pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, N2VError> {
     if name.to_lowercase() == "nand" {
         // Hard-coded NAND chip
         return Ok(ChipHDL {
@@ -237,8 +234,13 @@ impl<'a, 'b> Parser<'a, 'b> {
         match &t {
             None => Err(N2VError {
                 msg: format!("Early end of file expected {:?}", tt),
-                path: Some(self.scanner.path.clone()),
-                line: Some(self.scanner.line),
+                kind: ErrorKind::ParseError(Token {
+                    lexeme: String::from(""),
+                    path: self.scanner.path.clone(),
+                    line: self.scanner.line,
+                    start: self.scanner.col,
+                    token_type: TokenType::Eof,
+                }),
             }),
             Some(t) => {
                 if t.token_type == tt {
@@ -246,11 +248,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                 } else {
                     Err(N2VError {
                         msg: format!(
-                            "Expected token type {:?}, found {:?} ({})",
-                            tt, t.token_type, t.lexeme
+                            "I did not expect to see `{}`. I expected to see a kind of {:?}",
+                            t.lexeme, tt
                         ),
-                        path: Some(t.path.clone()),
-                        line: Some(t.line),
+                        kind: ErrorKind::ParseError(t.clone()),
                     })
                 }
             }
@@ -334,14 +335,28 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }) => {
                     return Ok(res);
                 }
-                _ => {
+                Some(t) => {
                     return Err(N2VError {
                         msg: format!(
                             "Expected identifier, number, comma, or right angle, found {:?}",
                             next
                         ),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!(
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
+                        ),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }
@@ -383,14 +398,28 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }) => {
                     return Ok(res);
                 }
-                _ => {
+                Some(t) => {
                     return Err(N2VError {
                         msg: format!(
-                            "Expected identifier, comma, or right angle, found {:?}",
+                            "Expected identifier, number, comma, or right angle, found {:?}",
                             next
                         ),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!(
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
+                        ),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }
@@ -428,11 +457,28 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }) => {
                     return Ok(res);
                 }
-                t => {
+                Some(t) => {
                     return Err(N2VError {
-                        msg: format!("Expected port identifier, found {:?}", t),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        msg: format!(
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
+                        ),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!(
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
+                        ),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }
@@ -465,11 +511,22 @@ impl<'a, 'b> Parser<'a, 'b> {
                     self.scanner.next();
                     break;
                 }
-                t => {
+                Some(t) => {
                     return Err(N2VError {
-                        msg: format!("Expected identifier, right curly, or For, found {:?}", t),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        msg: String::from("Expected identifier, number, comma, or right angle"),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!("Expected identifier, number, comma, or right angle"),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }
@@ -498,11 +555,22 @@ impl<'a, 'b> Parser<'a, 'b> {
                     self.scanner.next();
                     break;
                 }
-                t => {
+                Some(t) => {
                     return Err(N2VError {
-                        msg: format!("Expected identifier or right curly, found {:?}", t),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        msg: format!("Expected something else"),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!("Early end of file."),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }
@@ -563,8 +631,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             _ => {
                 return Err(N2VError {
                     msg: String::from("Expected number or generic var for port width."),
-                    path: Some(self.scanner.path.clone()),
-                    line: Some(self.scanner.line),
+                    kind: ErrorKind::ParseError(width_token),
                 });
             }
         };
@@ -658,11 +725,11 @@ impl<'a, 'b> Parser<'a, 'b> {
                     match peeked_type {
                         TokenType::Comma | TokenType::RightParen => {}
                         _ => {
-                            let found = self.scanner.peek().unwrap().lexeme;
+                            let found_t = self.scanner.peek().unwrap();
+                            let found = found_t.lexeme.clone();
                             return Err(N2VError {
                                 msg: format!("Expected comma or right paren, found {}", found),
-                                path: Some(self.scanner.path.clone()),
-                                line: Some(self.scanner.line),
+                                kind: ErrorKind::ParseError(found_t.clone()),
                             });
                         }
                     }
@@ -679,14 +746,28 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }) => {
                     break;
                 }
-                t => {
+                Some(t) => {
                     return Err(N2VError {
                         msg: format!(
-                            "Expected identifier or right curly, found {}",
-                            t.as_ref().unwrap().lexeme
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
                         ),
-                        path: Some(self.scanner.path.clone()),
-                        line: Some(self.scanner.line),
+                        kind: ErrorKind::ParseError(t.clone()),
+                    });
+                }
+                None => {
+                    return Err(N2VError {
+                        msg: format!(
+                            "Expected identifier, number, comma, or right angle, found {:?}",
+                            next
+                        ),
+                        kind: ErrorKind::ParseError(Token {
+                            lexeme: String::from(""),
+                            path: self.scanner.path.clone(),
+                            line: self.scanner.line,
+                            start: self.scanner.col,
+                            token_type: TokenType::Eof,
+                        }),
                     });
                 }
             }

@@ -1,4 +1,4 @@
-use crate::error::N2VError;
+use crate::error::{N2VError, ErrorKind};
 use crate::test_scanner::{TestScanner, Token, TokenType};
 use std::path::PathBuf;
 
@@ -87,8 +87,12 @@ impl<'a, 'b> TestParser<'a, 'b> {
         match &t {
             None => Err(N2VError {
                 msg: format!("Early end of file expected {:?}", tt),
-                path: Some(self.scanner.path.clone()),
-                line: Some(self.scanner.line),
+                kind: ErrorKind::TestParseError(Token {
+                    lexeme: String::from(""),
+                    path: self.scanner.path.clone(),
+                    line: self.scanner.line,
+                    token_type: TokenType::Eof,
+                }),
             }),
             Some(t) => {
                 if t.token_type == tt {
@@ -99,8 +103,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
                             "Expected token type {:?}, found {:?} ({})",
                             tt, t.token_type, t.lexeme
                         ),
-                        path: Some(t.path.clone()),
-                        line: Some(t.line),
+                        kind: ErrorKind::TestParseError(t.clone()),
                     })
                 }
             }

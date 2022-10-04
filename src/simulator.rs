@@ -11,7 +11,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use serde::Serialize;
 
 use crate::busmap::BusMap;
-use crate::error::N2VError;
+use crate::error::{N2VError, ErrorKind};
 use crate::expr::*;
 use crate::parser::*;
 
@@ -206,8 +206,7 @@ impl Chip {
                     hdl.generic_decls.len(),
                     generics.len()
                 ),
-                path: hdl.path.clone(),
-                line: None,
+                kind: ErrorKind::SimulationError(hdl.path.clone()),
             });
         }
         let mut variables = HashMap::new();
@@ -228,8 +227,8 @@ impl Chip {
             if let Err(e) = signals.create_bus(&port.name.value, width) {
                 return Err(N2VError {
                     msg: { format!("Cannot create port {}: {}", port.name.value, e) },
-                    path: port.name.path.clone(),
-                    line: port.name.line,
+                    //line: port.name.line,
+                    kind: ErrorKind::SimulationError(port.name.path.clone()),
                 });
             }
         }
@@ -256,8 +255,7 @@ impl Chip {
                                 hdl.path, n, iw, e
                             )
                         },
-                        path: hdl.path.clone(),
-                        line: None,
+                        kind: ErrorKind::SimulationError(hdl.path.clone()),
                     });
                 }
             } else {
@@ -323,8 +321,7 @@ impl Chip {
                     hdl.generic_decls.len(),
                     generics.len()
                 ),
-                path: hdl.path.clone(),
-                line: None,
+                kind: ErrorKind::SimulationError(hdl.path.clone()),
             });
         }
         let mut variables = HashMap::new();
@@ -555,24 +552,24 @@ impl Chip {
                             "Bit {} for signal name {} is out of range.",
                             idx, signal_name
                         ),
-                        path: relevant_ident.path.clone(),
-                        line: relevant_ident.line,
+                        //line: relevant_ident.line,
+                        kind: ErrorKind::SimulationError(relevant_ident.path.clone()),
                     });
                 }
 
                 match &signal_source[idx] {
                     None => Err(N2VError {
                         msg: format!("Bit {} for signal name {} is undefined.", idx, signal_name),
-                        path: relevant_ident.path.clone(),
-                        line: relevant_ident.line,
+                        //line: relevant_ident.line,
+                        kind: ErrorKind::SimulationError(relevant_ident.path.clone()),
                     }),
                     Some(x) => Ok(Some(x)),
                 }
             } else {
                 Err(N2VError {
                     msg: format!("No source for signal name {}.", signal_name),
-                    path: relevant_ident.path.clone(),
-                    line: relevant_ident.line,
+                    //line: relevant_ident.line,
+                    kind: ErrorKind::SimulationError(relevant_ident.path.clone()),
                 })
             }
         };
@@ -689,7 +686,7 @@ impl Chip {
         Ok(())
     }
 
-    fn get_port_values_for_direction(&self, direction: PortDirection) -> BusMap {
+    pub fn get_port_values_for_direction(&self, direction: PortDirection) -> BusMap {
         // Return output signals as a BusMap
         let mut values = BusMap::new();
         let ports = self.ports.clone();
@@ -1206,8 +1203,7 @@ pub fn infer_widths(
                 hdl.generic_decls.len(),
                 generics.len()
             ),
-            path: hdl.path.clone(),
-            line: None,
+            kind: ErrorKind::SimulationError(hdl.path.clone()),
         });
     }
     let mut variables = HashMap::new();
@@ -1264,8 +1260,8 @@ pub fn infer_widths(
                     .position(|x| x.name.value == m.port.name)
                     .ok_or(N2VError {
                         msg: format!("Non-existent port {}", &m.port.name),
-                        path: m.wire_ident.path.clone(),
-                        line: m.wire_ident.line,
+                        //line: m.wire_ident.line,
+                        kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                     })?;
                 let port = &component_hdl.ports[port_idx];
 
@@ -1301,8 +1297,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &port_width
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
                     }
@@ -1318,8 +1314,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &pr.end - &pr.start
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
                     }
@@ -1333,8 +1329,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, port_width
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
@@ -1349,8 +1345,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} wire range of signal {} is {}, not equal port {} width, which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
                         let max_width = eval_expr(
@@ -1375,8 +1371,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
@@ -1393,8 +1389,8 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
-                            path: m.wire_ident.path.clone(),
-                            line: m.wire_ident.line,
+                            //line: m.wire_ident.line,
+                            kind: ErrorKind::SimulationError(m.wire_ident.path.clone()),
                         });
                         }
 

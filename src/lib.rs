@@ -4,9 +4,10 @@ mod expr;
 pub mod parser; // hack to deal with dead code warning
 mod scanner;
 pub mod simulator;
+mod test_scanner;
 
 use crate::busmap::BusMap;
-use crate::error::N2VError;
+use crate::error::{N2VError, ErrorKind};
 use crate::parser::*;
 use crate::simulator::{Chip, Simulator};
 use expr::*;
@@ -95,13 +96,7 @@ pub fn full_table_internal(
 
     let hdl = match parser.parse() {
         Ok(x) => x,
-        Err(e) => {
-            return Err(N2VError {
-                msg: format!("Parse error: {}", e.msg),
-                path: None,
-                line: None,
-            });
-        }
+        Err(e) => { return Err(e) },
     };
 
     let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
@@ -129,8 +124,7 @@ pub fn full_table_internal(
     if total_rows > 1024 {
         return Err(N2VError {
             msg: String::from("Too many rows in truth table to display (max 32)."),
-            path: None,
-            line: None,
+            kind: ErrorKind::Other,
         });
     }
 
@@ -168,8 +162,7 @@ pub fn full_table_internal(
             Err(s) => {
                 return Err(N2VError {
                     msg: s,
-                    path: None,
-                    line: None,
+                    kind: ErrorKind::Other,
                 });
             }
         };

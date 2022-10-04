@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::error::N2VError;
+use crate::error::{N2VError, ErrorKind};
 use crate::parser::Identifier;
 
 // This is the type that can be used for
@@ -152,8 +152,7 @@ pub fn eval_expr_numeric(
     } else {
         Err(N2VError {
             msg: format!("Expression {} is non-numeric", expr),
-            line: None,
-            path: None,
+            kind: ErrorKind::NonNumeric,
         })
     }
 }

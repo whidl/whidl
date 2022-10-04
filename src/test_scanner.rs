@@ -23,6 +23,7 @@ pub enum TokenType {
     Eval,
     LeftAngle,
     RightAngle,
+    Eof,
 }
 
 #[derive(Clone, Debug)]
