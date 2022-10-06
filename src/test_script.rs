@@ -142,14 +142,20 @@ pub fn run_test(test_script_path: &str) {
         scanner: &mut scanner,
     };
     let hdl = parser.parse().unwrap();
-    let chip = Chip::new(
+    let chip = match Chip::new(
         &hdl,
         ptr::null_mut(),
         &provider,
         false,
         &test_script.generics,
-    )
-    .expect("Chip creation error");
+    ) {
+        Ok(x) => x,
+        Err(x) => {
+            println!("{}", x);
+            std::process::exit(1);
+        }
+    };
+
     let mut simulator = Simulator::new(chip);
 
     let hdl_contents = fs::read_to_string(hdl_path.clone()).expect("Unable to read HDL file.");

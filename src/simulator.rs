@@ -1257,7 +1257,7 @@ pub fn infer_widths(
                     .position(|x| x.name.value == m.port.name)
                     .ok_or(N2VError {
                         msg: format!("Non-existent port {}", &m.port.name),
-                        kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                        kind: ErrorKind::ParseIdentError(part.name.clone()),
                     })?;
                 let port = &component_hdl.ports[port_idx];
 

@@ -61,7 +61,6 @@ impl<'a> Scanner<'a> {
             ("IN", TokenType::In),
             ("OUT", TokenType::Out),
             ("FOR", TokenType::For),
-            ("IN", TokenType::In),
             ("TO", TokenType::To),
             ("GENERATE", TokenType::Generate),
         ]);
