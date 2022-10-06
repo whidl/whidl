@@ -141,7 +141,14 @@ pub fn run_test(test_script_path: &str) {
     let mut parser = Parser {
         scanner: &mut scanner,
     };
-    let hdl = parser.parse().unwrap();
+    let hdl = match parser.parse() {
+        Ok(x) => x,
+        Err(x) => {
+            println!("{}", x);
+            std::process::exit(1);
+        }
+    };
+
     let chip = match Chip::new(
         &hdl,
         ptr::null_mut(),
