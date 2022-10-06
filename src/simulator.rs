@@ -1344,10 +1344,9 @@ pub fn infer_widths(
                             && wr.start.is_numeric()
                             && (&wr.end - &wr.start) != port_width
                         {
-                            return Err(N2VError { msg: format!("Chip {} component {} wire range of signal {} is {}, not equal port {} width, which is {}.",
+                            return Err(N2VError { msg: format!("Chip `{}` component `{}` wire range of signal `{}` is {}, not equal port `{}` width, which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
                             ),
-                            //line: m.wire_ident.line,
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }

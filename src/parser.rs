@@ -55,7 +55,7 @@ pub struct FileReader {
 impl FileReader {
     pub fn new(base_path: &str) -> FileReader {
         if base_path.is_empty() {
-            panic!("empty basepath");
+            panic!("empty basepath, start file paths in the same directory with ./");
         }
         FileReader {
             base_path: PathBuf::from(base_path),

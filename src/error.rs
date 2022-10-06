@@ -64,25 +64,26 @@ impl std::fmt::Display for N2VError {
             }
             ErrorKind::ParseIdentError(provider, ident) => {
                 if ident.path.is_none() {
-                    return writeln!(f, "Error: {}", self.msg);
+                    return writeln!(f, "Error1: {}", self.msg);
                 }
                 if ident.line.is_none() {
-                    return writeln!(f, "Error: {}", self.msg);
+                    return writeln!(f, "Error2: {}", self.msg);
                 }
 
                 let hdl = match provider.get_hdl(
-                    &ident
+                    ident
                         .path
                         .as_ref()
                         .unwrap()
-                        .clone()
-                        .into_os_string()
-                        .into_string()
+                        .file_name()
+                        .unwrap()
+                        .to_str()
                         .unwrap(),
                 ) {
                     Ok(x) => x,
-                    Err(_) => {
-                        return writeln!(f, "Error: {}", self.msg);
+                    Err(e) => {
+                        writeln!(f, "{:?}", e);
+                        return writeln!(f, "Error3: {}", self.msg);
                     }
                 };
 
@@ -99,7 +100,7 @@ impl std::fmt::Display for N2VError {
                 writeln!(f, "\n\n{}", self.msg)
             }
             _ => {
-                writeln!(f, "Error: {}", self.msg)
+                writeln!(f, "Error4: {}", self.msg)
             }
         }
     }
