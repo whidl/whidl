@@ -11,7 +11,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use serde::Serialize;
 
 use crate::busmap::BusMap;
-use crate::error::{N2VError, ErrorKind};
+use crate::error::{ErrorKind, N2VError};
 use crate::expr::*;
 use crate::parser::*;
 
@@ -227,7 +227,7 @@ impl Chip {
             if let Err(e) = signals.create_bus(&port.name.value, width) {
                 return Err(N2VError {
                     msg: { format!("Cannot create port {}: {}", port.name.value, e) },
-                    kind: ErrorKind::ParseIdentError(port.name.clone()),
+                    kind: ErrorKind::ParseIdentError(hdl_provider.clone(), port.name.clone()),
                 });
             }
         }
@@ -551,7 +551,10 @@ impl Chip {
                             "Bit {} for signal name {} is out of range.",
                             idx, signal_name
                         ),
-                        kind: ErrorKind::ParseIdentError(relevant_ident.clone()),
+                        kind: ErrorKind::ParseIdentError(
+                            self.hdl_provider.clone(),
+                            relevant_ident.clone(),
+                        ),
                     });
                 }
 
@@ -559,14 +562,20 @@ impl Chip {
                     None => Err(N2VError {
                         msg: format!("Bit {} for signal name {} is undefined.", idx, signal_name),
                         //line: relevant_ident.line,
-                        kind: ErrorKind::ParseIdentError(relevant_ident.clone()),
+                        kind: ErrorKind::ParseIdentError(
+                            self.hdl_provider.clone(),
+                            relevant_ident.clone(),
+                        ),
                     }),
                     Some(x) => Ok(Some(x)),
                 }
             } else {
                 Err(N2VError {
                     msg: format!("No source for signal name {}.", signal_name),
-                    kind: ErrorKind::ParseIdentError(relevant_ident.clone()),
+                    kind: ErrorKind::ParseIdentError(
+                        self.hdl_provider.clone(),
+                        relevant_ident.clone(),
+                    ),
                 })
             }
         };
@@ -1257,7 +1266,7 @@ pub fn infer_widths(
                     .position(|x| x.name.value == m.port.name)
                     .ok_or(N2VError {
                         msg: format!("Non-existent port {}", &m.port.name),
-                        kind: ErrorKind::ParseIdentError(part.name.clone()),
+                        kind: ErrorKind::ParseIdentError(provider.clone(), part.name.clone()),
                     })?;
                 let port = &component_hdl.ports[port_idx];
 
@@ -1293,8 +1302,7 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &port_width
                             ),
-                            //line: m.wire_ident.line,
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
                     }
@@ -1310,7 +1318,7 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &pr.end - &pr.start
                             ),
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
                     }
@@ -1324,7 +1332,7 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, port_width
                             ),
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
@@ -1340,7 +1348,7 @@ pub fn infer_widths(
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
                             ),
                             //line: m.wire_ident.line,
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
                         let max_width = eval_expr(
@@ -1365,7 +1373,7 @@ pub fn infer_widths(
                             return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
@@ -1383,7 +1391,7 @@ pub fn infer_widths(
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
                             //line: m.wire_ident.line,
-                            kind: ErrorKind::ParseIdentError(m.wire_ident.clone()),
+                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         });
                         }
 

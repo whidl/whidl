@@ -199,7 +199,13 @@ pub fn run_test(test_script_path: &str) {
                     inputs.insert_option(&Bus::from(port.clone()), bool_values);
                 }
                 Instruction::Eval => {
-                    outputs = simulator.simulate(&inputs).expect("simulation failure");
+                    outputs = match simulator.simulate(&inputs) {
+                        Ok(x) => x,
+                        Err(x) => {
+                            println!("{}", x);
+                            std::process::exit(1);
+                        }
+                    };
                     print!(".");
                 }
                 Instruction::Output => {

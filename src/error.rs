@@ -1,11 +1,13 @@
+use crate::parser::HdlProvider;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 // Error type enum
 pub enum ErrorKind {
     ParseError(crate::scanner::Token),
-    ParseIdentError(crate::parser::Identifier),
+    ParseIdentError(Rc<dyn HdlProvider>, crate::parser::Identifier),
     TestParseError(crate::test_scanner::Token),
     SimulationError(Option<PathBuf>),
     IOError,
@@ -34,7 +36,7 @@ impl std::fmt::Display for N2VError {
                     Err(_) => {
                         writeln!(f, "In : {:?}", t.path.clone());
                         return writeln!(f, "Error: {}", self.msg);
-                    } 
+                    }
                 };
 
                 let n2 = t.line;
@@ -60,7 +62,7 @@ impl std::fmt::Display for N2VError {
                 }
                 writeln!(f, "\n\n{}", self.msg)
             }
-            ErrorKind::ParseIdentError(ident) => {
+            ErrorKind::ParseIdentError(provider, ident) => {
                 if ident.path.is_none() {
                     return writeln!(f, "Error: {}", self.msg);
                 }
@@ -68,14 +70,25 @@ impl std::fmt::Display for N2VError {
                     return writeln!(f, "Error: {}", self.msg);
                 }
 
-                let file = File::open(ident.path.as_ref().unwrap().clone()).unwrap();
-                let n2 = ident.line.as_ref().unwrap().clone();
+                let hdl = match provider.get_hdl(
+                    &ident
+                        .path
+                        .as_ref()
+                        .unwrap()
+                        .clone()
+                        .into_os_string()
+                        .into_string()
+                        .unwrap(),
+                ) {
+                    Ok(x) => x,
+                    Err(_) => {
+                        return writeln!(f, "Error: {}", self.msg);
+                    }
+                };
+
+                let n2 = *ident.line.as_ref().unwrap();
                 let line_num: usize = n2.try_into().unwrap();
-                let l = io::BufReader::new(file)
-                    .lines()
-                    .nth(line_num - 1)
-                    .unwrap()
-                    .unwrap();
+                let l = hdl.lines().nth(line_num - 1).unwrap();
 
                 writeln!(
                     f,
