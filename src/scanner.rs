@@ -32,7 +32,40 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Clone, Debug)]
+impl std::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            TokenType::Chip => write!(f, "the `CHIP` keyword (all caps)"),
+            TokenType::Identifier => write!(f, "an identifier"),
+            TokenType::LeftCurly => write!(f, "a left curly brace `{{`"),
+            TokenType::RightCurly => write!(f, "a right curly brace `}}`"),
+            TokenType::LeftBracket => write!(f, "a left bracket `[`"),
+            TokenType::RightBracket => write!(f, "a right bracket `]`"),
+            TokenType::LeftParen => write!(f, "a left paren `(`"),
+            TokenType::RightParen => write!(f, "a right paren `)`"),
+            TokenType::LeftAngle => write!(f, "a left angle bracket `<`"),
+            TokenType::RightAngle => write!(f, "a right angle brack `>`"),
+            TokenType::Semicolon => write!(f, "a semicolon `;`"),
+            TokenType::Colon => write!(f, "a colon `:`"),
+            TokenType::In => write!(f, "the `IN` keyword (all caps)"),
+            TokenType::Out => write!(f, "the `OUT` keyword (all caps)"),
+            TokenType::Comma => write!(f, "a comma `,`"),
+            TokenType::Parts => write!(f, "the `PARTS` keyword (all caps)"),
+            TokenType::Number => write!(f, "a number such as `2` or `16`."),
+            TokenType::Equal => write!(f, "an equal sign `=`"),
+            TokenType::Dot => write!(f, "a dot `.`"),
+            TokenType::Invalid => write!(f, "INVALID TOKEN SOMETHING BAD HERE BE DRAGONS"),
+            TokenType::For => write!(f, "the `FOR` keyword (all caps)"),
+            TokenType::To => write!(f, "the `TO` keyword (all caps)"),
+            TokenType::Generate => write!(f, "the `GENERATE` keyword (all caps)"),
+            TokenType::Plus => write!(f, "a plus sign `+`"),
+            TokenType::Minus => write!(f, "a minus sign `-`"),
+            TokenType::Eof => write!(f, "the end of the file `EOF`"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,

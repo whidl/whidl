@@ -148,10 +148,7 @@ fn main() {
                 let usig_width = sig_width.as_ref().unwrap_or(&0);
                 let b = Bus {
                     name: sn,
-                    range: match sig_width {
-                        None => None,
-                        Some(x) => Some(0..x),
-                    },
+                    range: sig_width.map(|x| 0..x),
                 };
                 inputs.insert_option(&b, vec![Some(false); *usig_width]);
             }
