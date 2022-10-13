@@ -192,6 +192,9 @@ pub fn create_quartus_project(
         #============================================================
         set_location_assignment PIN_AF14 -to CLOCK_50
         set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to CLOCK_50
+
+        # Device and Pin options
+        set_global_assignment -name RESERVE_ALL_UNUSED_PINS_WEAK_PULLUP "AS INPUT TRI-STATED"
     "#,
     ));
 
