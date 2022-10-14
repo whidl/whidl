@@ -561,7 +561,6 @@ impl Chip {
                 match &signal_source[idx] {
                     None => Err(N2VError {
                         msg: format!("Bit {} for signal name {} is undefined.", idx, signal_name),
-                        //line: relevant_ident.line,
                         kind: ErrorKind::ParseIdentError(
                             self.hdl_provider.clone(),
                             relevant_ident.clone(),

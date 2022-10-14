@@ -164,7 +164,10 @@ fn main() {
             };
         }
         Commands::Test { test_file } => {
-            run_test(test_file);
+            if let Err(x) = run_test(test_file) {
+                println!("{}", x);
+                std::process::exit(1);
+            };
         }
     }
 }

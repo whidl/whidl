@@ -1,4 +1,5 @@
 use crate::busmap::BusMap;
+use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
 use crate::scanner::Scanner;
 use crate::simulator::{Bus, Chip, Port, Simulator};
@@ -59,7 +60,7 @@ fn read_cmp(
     path: &PathBuf,
     test_script: &TestScript,
     ports: &HashMap<String, Port>,
-) -> Vec<BusMap> {
+) -> Result<Vec<BusMap>, N2VError> {
     let mut res: Vec<BusMap> = Vec::new();
     let file = fs::File::open(path).unwrap_or_else(|_| panic!("No such cmp file {:?}", path));
     let buf = BufReader::new(file);
@@ -69,6 +70,15 @@ fn read_cmp(
     // Read header line and determine order of ports
     let mut header = lines.next().unwrap().expect("Corrupted cmp file");
     header.retain(|c| !c.is_whitespace());
+
+    // We need at least three characters for a valid header line:
+    // two pipes and a single letter port name.
+    if header.len() < 3 {
+        return Err(N2VError {
+            msg: format!("Header line for cmp file {:?} is too short. The header line is the first line of the .cmp file.", path),
+            kind: ErrorKind::Other,
+        });
+    }
 
     let port_order: Vec<String> = header[1..header.len() - 1]
         .split('|')
@@ -82,7 +92,26 @@ fn read_cmp(
         let mut step_result = BusMap::new();
         let mut line = l.clone();
         line.retain(|c| !c.is_whitespace());
+
+        if line.len() < 3 {
+            return Err(N2VError {
+                msg: format!(
+                    "The line {} in {:?} is too short to be correct.",
+                    line, path
+                ),
+                kind: ErrorKind::Other,
+            });
+        }
+
         for (i, v) in line[1..line.len() - 1].split('|').enumerate() {
+            if i >= test_script.output_list.len() {
+                return Err(N2VError {
+                    msg: format!(
+                        "The line {} in {:?} contains more columns than the test script output-list.", line, path
+                    ),
+                    kind: ErrorKind::Other,
+                });
+            }
             let number_system = test_script.output_list[i].number_system.clone();
             if number_system == NumberSystem::String {
                 continue;
@@ -101,12 +130,27 @@ fn read_cmp(
             let mut value = bitvec_to_vecbool(bitvec_value);
             value.reverse();
 
-            let port_width = ports
-                .get(&port_order[i])
-                .unwrap_or_else(|| panic!("Corrupt .cmp file"))
-                .width;
+            if i >= port_order.len() {
+                return Err(N2VError {
+                    msg: format!(
+                        "The line {} in {:?} contains more columns than the header line.",
+                        line, path
+                    ),
+                    kind: ErrorKind::Other,
+                });
+            }
 
-            value.truncate(port_width);
+            let portw = match ports.get(&port_order[i]) {
+                None => {
+                    return Err(N2VError {
+                        msg: format!("CMP / HDL mismatch. The .cmp file refers to port `{}`, but the HDL file does not.", port_order[i]),
+                        kind: ErrorKind::Other,
+                    });
+                }
+                Some(x) => x,
+            };
+
+            value.truncate(portw.width);
             value.reverse();
             step_result.create_bus(&port_order[i], value.len()).unwrap();
             let bus = Bus {
@@ -118,10 +162,10 @@ fn read_cmp(
         res.push(step_result);
     }
 
-    res
+    Ok(res)
 }
 
-pub fn run_test(test_script_path: &str) -> Result<(), ()> {
+pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
     // Parse the test script
     let test_pathbuf = PathBuf::from(test_script_path);
     let test_contents = read_test(&test_pathbuf);
@@ -185,7 +229,7 @@ pub fn run_test(test_script_path: &str) -> Result<(), ()> {
         .parent()
         .unwrap()
         .join(&test_script.compare_file);
-    let expected = read_cmp(&compare_path, &test_script, &ports);
+    let expected = read_cmp(&compare_path, &test_script, &ports)?;
 
     let mut inputs = BusMap::new();
     let mut cmp_idx = 0;
@@ -206,13 +250,7 @@ pub fn run_test(test_script_path: &str) -> Result<(), ()> {
                     inputs.insert_option(&Bus::from(port.clone()), bool_values);
                 }
                 Instruction::Eval => {
-                    outputs = match simulator.simulate(&inputs) {
-                        Ok(x) => x,
-                        Err(x) => {
-                            println!("{}", x);
-                            return Err(());
-                        }
-                    };
+                    outputs = simulator.simulate(&inputs)?;
                     print!(".");
                 }
                 Instruction::Output => {
@@ -221,7 +259,10 @@ pub fn run_test(test_script_path: &str) -> Result<(), ()> {
                         println!("Step: {}", cmp_idx + 1);
                         println!("Expected: {:?}", expected[cmp_idx]);
                         println!("Actual: {:?}", outputs);
-                        return Err(());
+                        return Err(N2VError {
+                            msg: String::from("Test failed."),
+                            kind: ErrorKind::Other,
+                        });
                     }
                     assert_le!(expected[cmp_idx], outputs.clone(), "Step: {}", cmp_idx + 1);
                     cmp_idx += 1;
@@ -422,5 +463,4 @@ mod test {
         let path = construct_path(&PathBuf::from("arm/Mux8Way3.tst"));
         assert!(run_test(path.to_str().unwrap()).is_ok());
     }
-
 }
