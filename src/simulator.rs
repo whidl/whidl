@@ -147,7 +147,7 @@ pub struct Chip {
     pub ports: HashMap<String, Port>,
     input_port_nodes: Vec<NodeIndex>,
     output_port_nodes: Vec<NodeIndex>,
-    signals: BusMap,
+    pub signals: BusMap,
     elaborated: bool,
     parent: *mut Chip,
     pub components: Vec<Component>, // Constructed from HDL parts which may contain for-generate loops.

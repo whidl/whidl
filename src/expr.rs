@@ -207,7 +207,7 @@ pub fn eval_expr(expr: &GenericWidth, state: &HashMap<String, GenericWidth>) -> 
                         let finished = GenericWidth::Expr(
                             outer_op,
                             Box::new(n.clone()),
-                            Box::new(collapsed_expr.clone()),
+                            Box::new(collapsed_expr),
                         );
                         return finished;
                     }
@@ -261,7 +261,7 @@ pub fn eval_expr(expr: &GenericWidth, state: &HashMap<String, GenericWidth>) -> 
                         let finished = GenericWidth::Expr(
                             outer_op,
                             Box::new(n.clone()),
-                            Box::new(collapsed_expr.clone()),
+                            Box::new(collapsed_expr),
                         );
                         return finished;
                     }

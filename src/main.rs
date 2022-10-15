@@ -162,6 +162,22 @@ fn main() {
                     std::process::exit(1);
                 }
             };
+
+            println!("✔️️️    Check Passed"); 
+            println!("---------------------");
+            println!("Name: {}", &simulator.chip.name);
+            println!("Ports:");
+            for (port_name, port) in &simulator.chip.ports {
+                println!("\t{}: Direction={:?} Width={}", &port_name, port.direction, port.width);
+            }
+            println!("Signals:");
+            for signal_name in &simulator.chip.signals.signals() {
+                let sig_width = match &simulator.chip.signals.get_width(signal_name) {
+                    Some(w) => w.to_string(),
+                    None => String::from("?"),
+                };
+                println!("\t{}: Width={}", &signal_name, &sig_width);
+            }
         }
         Commands::Test { test_file } => {
             if let Err(x) = run_test(test_file) {

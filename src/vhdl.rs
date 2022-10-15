@@ -310,30 +310,37 @@ fn ports(chip: &ChipHDL) -> String {
     vhdl
 }
 
-// Creates the VHDL generic map for a component.
-fn generic_map(component_hdl: &ChipHDL, component: &Component) -> String {
-    // Parameters assigned to generic variables.
-    let component_variables: Vec<String> = component_hdl
-        .generic_decls
-        .iter()
-        .map(|x| x.value.clone())
-        .zip(component.generic_params.clone())
-        .map(|(var, val)| format!("{} => {}", var, val))
-        .collect();
+fn port_mapping(
+    hdl: &ChipHDL,
+    mapping: &PortMapping,
+    inferred_widths: &HashMap<String, GenericWidth>,
+) -> (String, String, String, String) {
+    let port_width = &hdl.get_port(&mapping.port.name).width;
+    let vhdl_port_name = keyw(&mapping.port.name);
 
-    if component_variables.is_empty() {
-        String::from("")
-    } else {
-        format!("generic map({})\n\t", component_variables.join(","))
-    }
-}
-
-fn port_mapping(mapping: &PortMapping) -> String {
     let port_range = match &mapping.port.start {
-        None => String::from(""),
+        None => {
+            if &GenericWidth::Terminal(Terminal::Num(1)) != port_width {
+                if &mapping.wire.name != "false" && &mapping.wire.name != "true" {
+                    let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                    if &GenericWidth::Terminal(Terminal::Num(1)) == wire_width {
+                        // This happens when port width is 1 due to generic var.
+                        // and signal is width 1 and therefore std_logic.
+                        // The widths match up, but one is std_logic_vector and one is std_logic.
+                        String::from("(0)")
+                    } else {
+                        String::from("")
+                    }
+                } else {
+                    String::from("")
+                }
+            } else {
+                String::from("")
+            }
+        }
         Some(_) => {
-            if mapping.port.start == mapping.port.end {
-                format!("({})", &mapping.port.start.as_ref().unwrap())
+            if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
+                format!("({})", mapping.wire.start.as_ref().unwrap())
             } else {
                 format!(
                     "({} downto {})",
@@ -343,10 +350,14 @@ fn port_mapping(mapping: &PortMapping) -> String {
             }
         }
     };
+
     let wire_range = match &mapping.wire.start {
         None => String::from(""),
         Some(_) => {
-            if mapping.wire.start == mapping.wire.end {
+            let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
+                String::from("")
+            } else if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
                 format!("({})", mapping.wire.start.as_ref().unwrap())
             } else {
                 format!(
@@ -357,16 +368,25 @@ fn port_mapping(mapping: &PortMapping) -> String {
             }
         }
     };
-    let port_name = keyw(&mapping.port.name);
     let wire_name: String = if let "false" = mapping.wire.name.to_lowercase().as_str() {
-        // we may not know what the width of the port is
-        String::from("(others => '0')")
+        if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
+            String::from("'0'")
+        } else {
+            // we may not know what the width of the port is
+            String::from("(others => '0')")
+        }
     } else if let "true" = mapping.wire.name.to_lowercase().as_str() {
-        String::from("(others => '1')")
+        if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
+            String::from("'1'")
+        } else {
+            // we may not know what the width of the port is
+            String::from("(others => '1')")
+        }
     } else {
         keyw(&mapping.wire.name)
     };
-    format!("{}{} => {}{}", port_name, port_range, wire_name, wire_range)
+
+    (vhdl_port_name, port_range, wire_name, wire_range)
 }
 
 // VHDL keywords that we can't use.
@@ -448,39 +468,124 @@ pub fn synth_vhdl(
         }
     }
 
-    // Generate the signals required to port/generic map this component.
-    let signals = generate_signals(hdl, provider)?;
+    let mut signal_vhdl: String = String::new();
+    let mut arch_vhdl: String = String::new();
 
-    for signal in &signals {
-        top_level_vhdl = top_level_vhdl + signal;
-    }
+    let components = generate_components(hdl)?;
+    let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
+    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
 
-    // Actual chip definition
-    writeln!(&mut top_level_vhdl, "begin").unwrap();
+    let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
+        let mut new_signal: String = String::new();
+        if !port_names.contains(&keyw(wire_name)) {
+            write!(&mut new_signal, "signal {} ", keyw(wire_name)).unwrap();
+            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
+                write!(&mut new_signal, ": std_logic;").unwrap();
+            } else {
+                write!(
+                    &mut new_signal,
+                    ": std_logic_vector({} downto 0);",
+                    wire_width - &GenericWidth::Terminal(Terminal::Num(1))
+                )
+                .unwrap();
+            }
+        }
+
+        new_signal
+    };
+
+    let mut signals: HashSet<String> = HashSet::new();
 
     for (component_counter, part) in hdl.parts.iter().enumerate() {
         match part {
             Part::Component(c) => {
                 let component_hdl = get_hdl(&c.name.value, provider).unwrap();
-                let generic_map = generic_map(&component_hdl, c);
+                let component_id = format!("nand2v_c{}", component_counter);
 
-                let port_map = c
-                    .mappings
+                // Parameters assigned to generic variables.
+                let component_variables: HashMap<String, GenericWidth> = component_hdl
+                    .generic_decls
                     .iter()
-                    .map(port_mapping)
-                    .collect::<Vec<String>>()
-                    .join(", ");
+                    .map(|x| x.value.clone())
+                    .zip(c.generic_params.clone())
+                    .collect();
+                let vhdl_generic_params: Vec<String> = component_variables
+                    .iter()
+                    .map(|(var, val)| format!("{} => {}", var, val))
+                    .collect();
+                let mut generic_map = String::new();
+                if !component_variables.is_empty() {
+                    write!(
+                        &mut generic_map,
+                        "generic map({})\n\t",
+                        vhdl_generic_params.join(",")
+                    )
+                    .unwrap();
+                }
+
+                let mut port_map: Vec<String> = Vec::new();
+
+                let mut redirect_counter = 0;
+
+                let mut redirected_ports: HashSet<String> = HashSet::new();
+                for mapping in c.mappings.iter() {
+                    // Print the declaration for the signal required for this mapping.
+                    if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                        let sig = print_signal(
+                            &mapping.wire.name,
+                            &eval_expr(wire_width, &component_variables),
+                        );
+                        signals.insert(sig);
+                    }
+
+                    let port_direction = &component_hdl.get_port(&mapping.port.name).direction;
+                    let (vhdl_port_name, port_range, wire_name, wire_range) =
+                        port_mapping(&component_hdl, mapping, &inferred_widths);
+
+                    if port_direction == &PortDirection::In {
+                        port_map.push(format!(
+                            "{}{} => {}{}",
+                            vhdl_port_name, port_range, wire_name, wire_range
+                        ));
+                    } else {
+                        let redirect_signal =
+                            format!("{}_{}{}", component_id, vhdl_port_name, redirect_counter);
+                        if redirected_ports.get(&vhdl_port_name).is_none() {
+                            redirected_ports.insert(vhdl_port_name.clone());
+                            port_map.push(format!(
+                                "{}{} => {}{}",
+                                vhdl_port_name, port_range, redirect_signal, wire_range
+                            ));
+                            redirect_counter += 1;
+                        }
+                        writeln!(
+                            &mut arch_vhdl,
+                            "{}{} <= {}{};",
+                            wire_name, wire_range, redirect_signal, wire_range
+                        )
+                        .unwrap();
+
+                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                        let sig = print_signal(
+                            &redirect_signal,
+                            &eval_expr(wire_width, &component_variables),
+                        );
+                        signals.insert(sig);
+                    }
+                }
 
                 writeln!(
-                    &mut top_level_vhdl,
-                    "nand2v_c{} : {}\n\t{}port map ({});\n",
-                    component_counter,
+                    &mut arch_vhdl,
+                    "{} : {}\n\t{}port map ({});\n",
+                    component_id,
                     keyw(&c.name.value),
                     generic_map,
-                    port_map
+                    port_map.join(", ")
                 )
                 .unwrap();
             }
+
             Part::Loop(lp) => {
                 let body: Vec<String> = lp
                     .body
@@ -489,28 +594,105 @@ pub fn synth_vhdl(
                     .map(|(i, c)| {
                         let mut body_vhdl = String::new();
                         let component_hdl = get_hdl(&c.name.value, provider).unwrap();
-                        let generic_map = generic_map(&component_hdl, c);
-                        let port_map = c
-                            .mappings
+                        let component_id = format!("n2vc{}_lp{}", component_counter, i);
+
+                        // Parameters assigned to generic variables.
+                        let component_variables: HashMap<String, GenericWidth> = component_hdl
+                            .generic_decls
                             .iter()
-                            .map(port_mapping)
-                            .collect::<Vec<String>>()
-                            .join(", ");
+                            .map(|x| x.value.clone())
+                            .zip(c.generic_params.clone())
+                            .collect();
+                        let vhdl_generic_params: Vec<String> = component_variables
+                            .iter()
+                            .map(|(var, val)| format!("{} => {}", var, val))
+                            .collect();
+                        let mut generic_map = String::new();
+                        if !component_variables.is_empty() {
+                            write!(
+                                &mut generic_map,
+                                "generic map({})\n\t",
+                                vhdl_generic_params.join(",")
+                            )
+                            .unwrap();
+                        }
+
+                        let mut port_map: Vec<String> = Vec::new();
+
+                        let mut redirect_counter = 0;
+                        let mut redirected_ports: HashSet<String> = HashSet::new();
+                        for mapping in c.mappings.iter() {
+                            // Print the declaration for the signal required for this mapping.
+                            if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                                let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                                let sig = print_signal(
+                                    &mapping.wire.name,
+                                    &eval_expr(wire_width, &component_variables),
+                                );
+                                signals.insert(sig);
+                            }
+
+                            let port_direction =
+                                &component_hdl.get_port(&mapping.port.name).direction;
+                            let (vhdl_port_name, port_range, wire_name, wire_range) =
+                                port_mapping(&component_hdl, mapping, &inferred_widths);
+
+                            if port_direction == &PortDirection::In {
+                                port_map.push(format!(
+                                    "{}{} => {}{}",
+                                    vhdl_port_name, port_range, wire_name, wire_range
+                                ));
+                            } else if &mapping.wire.name != "true" && &mapping.wire.name != "false"
+                            {
+                                let redirect_signal = format!(
+                                    "{}_{}{}",
+                                    component_id, vhdl_port_name, redirect_counter
+                                );
+                                if redirected_ports.get(&vhdl_port_name).is_none() {
+                                    redirected_ports.insert(vhdl_port_name.clone());
+                                    port_map.push(format!(
+                                        "{}{} => {}{}",
+                                        vhdl_port_name, port_range, redirect_signal, wire_range
+                                    ));
+                                    redirect_counter += 1;
+                                }
+                                writeln!(
+                                    &mut body_vhdl,
+                                    "{}{} <= {}{};",
+                                    wire_name, wire_range, redirect_signal, wire_range
+                                )
+                                .unwrap();
+
+                                let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                                let sig = print_signal(
+                                    &redirect_signal,
+                                    &eval_expr(wire_width, &component_variables),
+                                );
+                                signals.insert(sig);
+                            } else {
+                                port_map.push(format!(
+                                    "{}{} => {}",
+                                    vhdl_port_name, port_range, &mapping.wire.name
+                                ));
+                            }
+                        }
+
                         writeln!(
                             &mut body_vhdl,
-                            "n2vlpc{} : {}\n\t{}port map ({});",
-                            i,
+                            "{} : {}\n\t{}port map ({});",
+                            component_id,
                             keyw(&c.name.value),
                             generic_map,
-                            port_map
+                            port_map.join(", ")
                         )
                         .unwrap();
+
                         body_vhdl
                     })
                     .collect();
                 writeln!(
-                    &mut top_level_vhdl,
-                    "n2vlp{} : for {} in {} to {} generate {} end generate n2vlp{};",
+                    &mut arch_vhdl,
+                    "n2vlp{} : for {} in {} to {} generate\n{} end generate n2vlp{};",
                     component_counter,
                     lp.iterator.value,
                     lp.start,
@@ -523,6 +705,14 @@ pub fn synth_vhdl(
         }
     }
 
+    for s in &signals {
+        writeln!(&mut signal_vhdl, "{}", s).unwrap();
+    }
+
+    // Actual chip definition
+    top_level_vhdl = top_level_vhdl + &signal_vhdl;
+    writeln!(&mut top_level_vhdl, "begin").unwrap();
+    top_level_vhdl = top_level_vhdl + &arch_vhdl;
     writeln!(&mut top_level_vhdl, "end architecture arch;").unwrap();
 
     let mut header_vhdl = String::new();
@@ -580,54 +770,6 @@ fn generate_component_declaration(component: &Component, provider: &Rc<dyn HdlPr
     component_decl
 }
 
-/// Generates signal definitions for the signals in a chip, iterates over all components.
-/// * `hdl` - HDL of the chip
-/// * `provider` - Responsible for fetching HDL files.
-/// * `generic_params` - Parameter list for the *chip defined by `hdl`*
-/// * `variables` - Variable state of the chip.
-fn generate_signals(
-    hdl: &ChipHDL,
-    provider: &Rc<dyn HdlProvider>,
-) -> Result<HashSet<String>, N2VError> {
-    let mut signals = HashSet::new();
-
-    // Extract list of components. For components in a generator loop substitute
-    // max range value for iterator variable to ensure the widest possible
-    // signal is generated.
-    let components = generate_components(hdl)?;
-
-    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
-    let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
-
-    for component in components {
-        for mapping in &component.mappings {
-            if &mapping.wire.name == "true" || &mapping.wire.name == "false" {
-                continue;
-            }
-
-            let mut signal_vhdl = String::new();
-
-            let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-            if !port_names.contains(&keyw(&mapping.wire.name)) {
-                write!(&mut signal_vhdl, "signal {} ", keyw(&mapping.wire.name)).unwrap();
-                if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
-                    writeln!(&mut signal_vhdl, ": std_logic;").unwrap();
-                } else {
-                    writeln!(
-                        &mut signal_vhdl,
-                        ": std_logic_vector({} downto 0);",
-                        wire_width - &GenericWidth::Terminal(Terminal::Num(1))
-                    )
-                    .unwrap();
-                }
-            }
-            signals.insert(signal_vhdl);
-        }
-    }
-
-    Ok(signals)
-}
-
 fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
     let mut res = Vec::new();
 
@@ -639,25 +781,27 @@ fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
                 res.push(c.clone());
             }
             Part::Loop(l) => {
-                let end = eval_expr(&l.end, &HashMap::new());
-                variables.insert(l.iterator.value.clone(), end);
+                for e in [&l.start, &l.end] {
+                    let end = eval_expr(e, &HashMap::new());
+                    variables.insert(l.iterator.value.clone(), end);
 
-                for c in &l.body {
-                    let mut new_c: Component = c.clone();
-                    for m in &mut new_c.mappings {
-                        m.port.start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
-                        m.port.end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
-                        m.wire.start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
-                        m.wire.end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
+                    for c in &l.body {
+                        let mut new_c: Component = c.clone();
+                        for m in &mut new_c.mappings {
+                            m.port.start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
+                            m.port.end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
+                            m.wire.start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
+                            m.wire.end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
+                        }
+
+                        new_c.generic_params = new_c
+                            .generic_params
+                            .iter()
+                            .map(|x| eval_expr(x, &variables))
+                            .collect();
+
+                        res.push(new_c);
                     }
-
-                    new_c.generic_params = new_c
-                        .generic_params
-                        .iter()
-                        .map(|x| eval_expr(x, &variables))
-                        .collect();
-
-                    res.push(new_c);
                 }
             }
         }
