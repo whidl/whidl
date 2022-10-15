@@ -379,24 +379,122 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
         }
     }
 
-    // N + C, N + D -> LHS if C > D
-    // N + C, N + D -> RHS if D > C
-    // N + C, N + D -> EQ if D = C
+    if let GenericWidth::Expr(Op::Add, lhs_lhs, lhs_rhs) = &t1 {
+        if let GenericWidth::Expr(Op::Add, rhs_lhs, rhs_rhs) = &t2 {
+            if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
+                if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
+                    if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
+                        if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
+                            if n1 == n2 {
+                                // N + C, N + D -> LHS if C = D and C == 0
+                                if c == &0 && d == &0 {
+                                    return GenericWidth::Terminal(Terminal::Var(n1.clone()));
+                                }
 
-    // N - C, N + D -> RHS if C > D
-    // N - C, N + D -> RHS if C < D
-    // N - C, N + D -> RHS if C = D and C != 0
-    // N - C, N + D -> EQ if C = D  and C = 0
+                                match c.cmp(d) {
+                                    // N + C, N + D -> LHS if C > D
+                                    Ordering::Greater => {
+                                        return t1;
+                                    }
+                                    // N + C, N + D -> RHS if D > C
+                                    Ordering::Less => {
+                                        return t2;
+                                    }
+                                    // N + C, N + D -> EQ if D = C
+                                    Ordering::Equal => {
+                                        return t1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    // N + C, N - D -> LHS if C > C h
-    // N + C, N - D -> LHS if D > C
-    // N + C, N - D -> LHS if C = D and C != 0
+    if let GenericWidth::Expr(Op::Sub, lhs_lhs, lhs_rhs) = &t1 {
+        if let GenericWidth::Expr(Op::Add, rhs_lhs, rhs_rhs) = &t2 {
+            if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
+                if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
+                    if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
+                        if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
+                            if n1 == n2 {
+                                // N - C, N + D -> EQ if C = D  and C = 0
+                                if c == &0 && d == &0 {
+                                    return GenericWidth::Terminal(Terminal::Var(n1.clone()));
+                                }
+                                // N - C, N + D -> RHS if C > D
+                                // N - C, N + D -> RHS if C < D
+                                // N - C, N + D -> RHS if C = D and C != 0
+                                return t2;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    // N - C, N - D -> RHS if C > D
-    // N - C, N - D -> LHS if D > C
-    // N - C, N - D -> EQ if C = D
+    if let GenericWidth::Expr(Op::Add, lhs_lhs, lhs_rhs) = &t1 {
+        if let GenericWidth::Expr(Op::Sub, rhs_lhs, rhs_rhs) = &t2 {
+            if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
+                if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
+                    if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
+                        if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
+                            if n1 == n2 {
+                                // N + C, N - D -> LHS if C = D and C == 0
+                                if c == &0 && d == &0 {
+                                    return GenericWidth::Terminal(Terminal::Var(n1.clone()));
+                                }
+                                // N + C, N - D -> LHS if C > C h
+                                // N + C, N - D -> LHS if D > C
+                                // N + C, N - D -> LHS if C = D and C != 0
+                                return t1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    // No op - we don't know.
+    if let GenericWidth::Expr(Op::Sub, lhs_lhs, lhs_rhs) = &t1 {
+        if let GenericWidth::Expr(Op::Sub, rhs_lhs, rhs_rhs) = &t2 {
+            if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
+                if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
+                    if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
+                        if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
+                            if n1 == n2 {
+                                // N - C, N - D -> LHS if C = D and C == 0
+                                if c == &0 && d == &0 {
+                                    return GenericWidth::Terminal(Terminal::Var(n1.clone()));
+                                }
+
+                                match c.cmp(d) {
+                                    // N - C, N - D -> RHS if C > D
+                                    Ordering::Greater => {
+                                        return t2;
+                                    }
+                                    // N - C, N - D -> LHS if D > C
+                                    Ordering::Less => {
+                                        return t1;
+                                    }
+                                    // N - C, N - D -> EQ if C = D
+                                    Ordering::Equal => {
+                                        return t1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // We don't know what to do. For example MAX(X, Y) is impossible.
+    // Ideally this would be disallowed in the HDL before we hit this panic.
     panic!("I don't know how to simplify MAX({}, {}).", t1, t2);
 }
 
@@ -805,4 +903,403 @@ mod test {
         assert_eq!(actual, expected);
     }
 
+    // N + C, N + D -> LHS if C > D
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_plus_d_big_c() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(2))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(2))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N + D -> RHS if D > C
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_plus_d_big_d() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(4))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(55))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(55))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N + D -> EQ if D = C
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_plus_d_equal_nonzero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(4))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(4))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(4))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N - D -> LHS if C = D and C == 0
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_plus_d_equal_zero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+        );
+        let actual = eval_expr(&input, &state);
+        let expected = GenericWidth::Terminal(Terminal::Var(Identifier::from("N")));
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N + D -> RHS if C > D
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_plus_d_big_c() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(4))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N + D -> RHS if C < D
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_plus_d_big_d() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(99))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(99))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N + D -> RHS if C = D and C != 0
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_plus_d_equal_nonzero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N + D -> EQ if C = D  and C = 0
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_plus_d_equal_zero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+        );
+        let expected = GenericWidth::Terminal(Terminal::Var(Identifier::from("N")));
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N - D -> LHS if C = D and C == 0
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_minus_d_equal_zero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+        );
+        let expected = GenericWidth::Terminal(Terminal::Var(Identifier::from("N")));
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N - D -> LHS if C > D
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_minus_d_big_c() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N - D -> LHS if D > C
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_minus_d_big_d() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(10))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N + C, N - D -> LHS if C = D and C != 0
+    #[test]
+    fn test_expr_simplify_max_n_plus_c_n_minus_d_equal_nonzero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Add,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Add,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(5))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N - D -> LHS if C = D and C == 0
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_minus_d_equal_zero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(0))),
+            )),
+        );
+        let expected = GenericWidth::Terminal(Terminal::Var(Identifier::from("N")));
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N - D -> LHS if C = D and C != 0
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_minus_d_equal_nonzero() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Sub,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N - D -> RHS if C > D
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_minus_d_big_c() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(13))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Sub,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
+
+    // N - C, N - D -> LHS if D > C
+    #[test]
+    fn test_expr_simplify_max_n_minus_c_n_minus_d_big_d() {
+        let state = HashMap::new();
+        let input = GenericWidth::Expr(
+            Op::Max,
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+            )),
+            Box::new(GenericWidth::Expr(
+                Op::Sub,
+                Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+                Box::new(GenericWidth::Terminal(Terminal::Num(13))),
+            )),
+        );
+        let expected = GenericWidth::Expr(
+            Op::Sub,
+            Box::new(GenericWidth::Terminal(Terminal::Var(Identifier::from("N")))),
+            Box::new(GenericWidth::Terminal(Terminal::Num(3))),
+        );
+        let actual = eval_expr(&input, &state);
+        assert_eq!(actual, expected);
+    }
 }
