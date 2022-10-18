@@ -525,8 +525,6 @@ pub fn synth_vhdl(
 
                 let mut port_map: Vec<String> = Vec::new();
 
-                let mut redirect_counter = 0;
-
                 let mut redirected_ports: HashSet<String> = HashSet::new();
                 for mapping in c.mappings.iter() {
                     // Print the declaration for the signal required for this mapping.
@@ -549,15 +547,13 @@ pub fn synth_vhdl(
                             vhdl_port_name, port_range, wire_name, wire_range
                         ));
                     } else {
-                        let redirect_signal =
-                            format!("{}_{}{}", component_id, vhdl_port_name, redirect_counter);
+                        let redirect_signal = format!("{}_{}", component_id, vhdl_port_name);
                         if redirected_ports.get(&vhdl_port_name).is_none() {
                             redirected_ports.insert(vhdl_port_name.clone());
                             port_map.push(format!(
                                 "{}{} => {}{}",
                                 vhdl_port_name, port_range, redirect_signal, wire_range
                             ));
-                            redirect_counter += 1;
                         }
                         writeln!(
                             &mut arch_vhdl,
@@ -619,7 +615,6 @@ pub fn synth_vhdl(
 
                         let mut port_map: Vec<String> = Vec::new();
 
-                        let mut redirect_counter = 0;
                         let mut redirected_ports: HashSet<String> = HashSet::new();
                         for mapping in c.mappings.iter() {
                             // Print the declaration for the signal required for this mapping.
@@ -644,17 +639,14 @@ pub fn synth_vhdl(
                                 ));
                             } else if &mapping.wire.name != "true" && &mapping.wire.name != "false"
                             {
-                                let redirect_signal = format!(
-                                    "{}_{}{}",
-                                    component_id, vhdl_port_name, redirect_counter
-                                );
+                                let redirect_signal =
+                                    format!("{}_{}", component_id, vhdl_port_name);
                                 if redirected_ports.get(&vhdl_port_name).is_none() {
                                     redirected_ports.insert(vhdl_port_name.clone());
                                     port_map.push(format!(
                                         "{}{} => {}{}",
                                         vhdl_port_name, port_range, redirect_signal, wire_range
                                     ));
-                                    redirect_counter += 1;
                                 }
                                 writeln!(
                                     &mut body_vhdl,
