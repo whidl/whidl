@@ -224,7 +224,8 @@ use ieee.std_logic_1164.all;
 entity nand_n2v is
 port (a : in std_logic;
 b : in std_logic;
-out_n2v : out std_logic
+out_n2v : out std_logic;
+CLOCK_50 : in std_logic
 );
 end entity nand_n2v;
 architecture arch of nand_n2v is
@@ -235,12 +236,42 @@ end architecture arch;
     let mut file = File::create(project_dir.join("nand.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
 
+    let dff_vhdl = r#"
+library ieee;
+use ieee.std_logic_1164.all;
+LIBRARY altera;
+USE altera.altera_primitives_components.all;
+
+entity DFF_n2v is
+port (in_n2v : in std_logic;
+CLOCK_50 : in std_logic;
+out_n2v : out std_logic);
+end entity DFF_n2v;
+
+architecture arch of DFF_n2v is 
+
+COMPONENT DFF
+   PORT (d   : IN STD_LOGIC;
+        clk  : IN STD_LOGIC;
+        clrn : IN STD_LOGIC;
+        prn  : IN STD_LOGIC;
+        q    : OUT STD_LOGIC );
+
+END COMPONENT;
+
+begin
+x0: DFF port map (d => in_n2v, clk => CLOCK_50, clrn => '1', prn => '1', q => out_n2v);
+end architecture arch;
+"#;
+    let mut file = File::create(project_dir.join("dff.vhdl"))?;
+    file.write_all(dff_vhdl.as_bytes())?;
+
     tcl.push_str("set_global_assignment -name VHDL_FILE nand.vhdl\n");
+    tcl.push_str("set_global_assignment -name VHDL_FILE dff.vhdl\n");
     tcl.push_str("project_close");
     let mut file = File::create(project_dir.join("project.tcl"))?;
     file.write_all(tcl.as_bytes())?;
 
-    // TODO: pins for de1-soc
     Ok(())
 }
 
@@ -305,7 +336,7 @@ fn ports(chip: &ChipHDL) -> String {
         ports.push(port_vhdl);
     }
 
-    writeln!(&mut vhdl, "port ({});", ports.join(";\n")).unwrap();
+    writeln!(&mut vhdl, "port (CLOCK_50 : in std_logic; {});", ports.join(";\n")).unwrap();
 
     vhdl
 }
@@ -400,6 +431,8 @@ fn keyw(name: &str) -> String {
         "or" => String::from("or_n2v"),
         "xor" => String::from("xor_n2v"),
         "nor" => String::from("nor_n2v"),
+        "dff" => String::from("DFF_n2v"),
+        "register" => String::from("register_n2v"),
         _ => String::from(name),
     }
 }
@@ -574,7 +607,7 @@ pub fn synth_vhdl(
 
                 writeln!(
                     &mut arch_vhdl,
-                    "{} : {}\n\t{}port map ({});\n",
+                    "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
                     component_id,
                     keyw(&c.name.value),
                     generic_map,
@@ -672,7 +705,7 @@ pub fn synth_vhdl(
 
                         writeln!(
                             &mut body_vhdl,
-                            "{} : {}\n\t{}port map ({});",
+                            "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
                             component_id,
                             keyw(&c.name.value),
                             generic_map,
@@ -738,6 +771,9 @@ fn generate_component_definition(
 ) -> Result<HashMap<String, String>, N2VError> {
     // We skip NAND because that is hard-coded and will be copied separately.
     if &component.name.value.to_lowercase() == "nand" {
+        return Ok(HashMap::new());
+    }
+    if &component.name.value.to_lowercase() == "dff" {
         return Ok(HashMap::new());
     }
 

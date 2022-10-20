@@ -258,7 +258,15 @@ impl Chip {
                     });
                 }
             } else {
-                panic!();
+                return Err(N2VError {
+                    msg: {
+                        format!(
+                            "{:?} Cannot create internal signal {} of width {}.",
+                            hdl.path, n, iw
+                        )
+                    },
+                    kind: ErrorKind::SimulationError(hdl.path.clone()),
+                });
             }
         }
 

@@ -166,7 +166,7 @@ impl BusMap {
 
         let current_length = current.len();
         if range.end > current_length {
-            panic!("Attempt to use range outside of the declared bus width.");
+            panic!("Attempt to use range {:?} outside of the declared bus width {:?}.", range.end, current_length);
         }
 
         let mut res = vec![None; range.len()];
