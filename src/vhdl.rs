@@ -399,6 +399,7 @@ fn keyw(name: &str) -> String {
         "and" => String::from("and_n2v"),
         "or" => String::from("or_n2v"),
         "xor" => String::from("xor_n2v"),
+        "nor" => String::from("nor_n2v"),
         _ => String::from(name),
     }
 }
