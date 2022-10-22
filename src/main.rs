@@ -180,8 +180,8 @@ fn main() {
             }
         }
         Commands::Test { test_file } => {
-            if let Err(x) = run_test(test_file) {
-                println!("{}", x);
+            if let Err(e) = run_test(test_file) {
+                println!("{}", e);
                 std::process::exit(1);
             };
         }

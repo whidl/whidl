@@ -233,7 +233,8 @@ pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
 
     let mut inputs = BusMap::new();
     let mut cmp_idx = 0;
-    for step in test_script.steps {
+    let mut failures = 0;
+    for step in &test_script.steps {
         let mut outputs = BusMap::new();
         for instruction in &step.instructions {
             match instruction {
@@ -255,16 +256,12 @@ pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
                 }
                 Instruction::Output => {
                     if !(expected[cmp_idx] <= outputs.clone()) {
-                        println!("\n--- TEST FAILURE ------");
-                        println!("Step: {}", cmp_idx + 1);
+                        println!("❌ Step: {}", cmp_idx + 1);
                         println!("Expected: {:?}", expected[cmp_idx]);
                         println!("Actual: {:?}", outputs);
-                        return Err(N2VError {
-                            msg: String::from("Test failed."),
-                            kind: ErrorKind::Other,
-                        });
+                        println!();
+                        failures += 1;
                     }
-                    assert_le!(expected[cmp_idx], outputs.clone(), "Step: {}", cmp_idx + 1);
                     cmp_idx += 1;
                 }
                 Instruction::Tick => {
@@ -278,7 +275,22 @@ pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
         }
     }
 
-    println!("OK!");
+    if failures > 0 {
+        println!(
+            "❌️️️ {} failures, {} successes, {} total. ",
+            failures,
+            test_script.steps.len() - failures,
+            test_script.steps.len()
+        );
+
+        return Err(N2VError {
+            msg: String::from("Test failed."),
+            kind: ErrorKind::Other,
+        });
+    }
+
+    println!();
+    println!("✔️️️    {} tests passed.", test_script.steps.len());
     Ok(())
 }
 
