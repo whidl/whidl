@@ -11,6 +11,7 @@ mod test_parser;
 mod test_scanner;
 mod test_script;
 mod vhdl;
+mod rom;
 
 
 use crate::parser::*;
