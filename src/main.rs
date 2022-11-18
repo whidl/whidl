@@ -16,6 +16,7 @@ mod vhdl;
 use crate::parser::*;
 use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_script::run_test;
+use crate::error::{N2VError, ErrorKind};
 use clap::Parser as ArgParser;
 use clap::Subcommand;
 use object::{Object, ObjectSection};
@@ -164,6 +165,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Commands::Decode { thumb_binary } => {
             let bin_data = fs::read(thumb_binary)?;
+            let obj_file = object::File::parse(&*bin_data)?;
+
+            if let Some(section) = obj_file.section_by_name(".text") {
+                println!("{:#x?}", section.data()?);
+            } else {
+                return Err(Box::new(N2VError {
+                    msg: String::from("Text section is not available."),
+                    kind: ErrorKind::Other,
+                }));
+            }
+
             println!("decode a binary!")
         }
     }
