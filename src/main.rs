@@ -52,6 +52,17 @@ enum Commands {
         #[clap(short, long, action)]
         test_file: String,
     },
+
+    /// Synthesizes CS 314 ROM from .text section of ELF binary
+    /// Does not yet support .data or .bss sections
+    Rom {
+        thumb_binary: String,
+    },
+
+    /// Decodes a thumb binary and prints the .text section as machine cod
+    Decode {
+        thumb_binary: String,
+    }
 }
 
 fn main() {
@@ -184,6 +195,12 @@ fn main() {
                 println!("{}", e);
                 std::process::exit(1);
             };
+        }
+        Commands::Rom { thumb_binary } => {
+            println!("synth a ROM!")
+        }
+        Commands::Decode { thumb_binary } => {
+            println!("decode a binary!")
         }
     }
 }
