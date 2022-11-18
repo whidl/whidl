@@ -76,17 +76,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             output_dir,
             top_level_file,
         } => {
-            let mut scanner: Scanner;
-            let source_code;
-
-            let contents = fs::read_to_string(&top_level_file);
-            match contents {
-                Ok(sc) => {
-                    source_code = sc;
-                    scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-                }
-                Err(_) => panic!("Unable to read file."),
-            }
+            let source_code= fs::read_to_string(&top_level_file)?;
+            let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
             let mut parser = Parser {
                 scanner: &mut scanner,
             };
@@ -107,28 +98,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .expect("Unable to create project");
         }
         Commands::Check { top_level_file } => {
-            let mut scanner: Scanner;
-            let source_code;
-
-            let contents = fs::read_to_string(&top_level_file);
-            match contents {
-                Ok(sc) => {
-                    source_code = sc;
-                    scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-                }
-                Err(_) => panic!("Unable to read file."),
-            }
+            let source_code = fs::read_to_string(&top_level_file)?;
+            let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
             let mut parser = Parser {
                 scanner: &mut scanner,
             };
 
-            let hdl = match parser.parse() {
-                Ok(x) => x,
-                Err(x) => {
-                    println!("{}", x);
-                    std::process::exit(1);
-                }
-            };
+            let hdl = parser.parse()?;
 
             let base_path = String::from(
                 hdl.path
@@ -140,14 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .unwrap(),
             );
             let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-            let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new()) {
-                Ok(x) => x,
-                Err(x) => {
-                    println!("{}", x);
-                    std::process::exit(1);
-                }
-            };
-
+            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?; 
             let mut simulator = Simulator::new(chip);
 
             // Get all input ports.
@@ -169,13 +138,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             // We don't care what the outputs are, just want to simulate
             // and trigger any dynamic errors.
-            match simulator.simulate(&inputs) {
-                Ok(_) => {}
-                Err(x) => {
-                    println!("{}", x);
-                    std::process::exit(1);
-                }
-            };
+            simulator.simulate(&inputs)?; 
 
             println!("✔️️️    Check Passed"); 
             println!("---------------------");
