@@ -1,4 +1,5 @@
 use crate::parser::HdlProvider;
+use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
@@ -121,5 +122,11 @@ impl From<String> for N2VError {
             msg: e,
             kind: ErrorKind::Other,
         }
+    }
+}
+
+impl Error for N2VError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
     }
 }

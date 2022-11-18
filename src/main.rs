@@ -12,17 +12,20 @@ mod test_scanner;
 mod test_script;
 mod vhdl;
 
+
 use crate::parser::*;
 use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_script::run_test;
 use clap::Parser as ArgParser;
 use clap::Subcommand;
+use object::{Object, ObjectSection};
 use parser::Parser;
 use scanner::Scanner;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
+use std::error::Error;
 
 #[derive(ArgParser)]
 #[clap(version)]
@@ -65,7 +68,7 @@ enum Commands {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
@@ -191,16 +194,15 @@ fn main() {
             }
         }
         Commands::Test { test_file } => {
-            if let Err(e) = run_test(test_file) {
-                println!("{}", e);
-                std::process::exit(1);
-            };
+            run_test(test_file)?;
         }
         Commands::Rom { thumb_binary } => {
             println!("synth a ROM!")
         }
         Commands::Decode { thumb_binary } => {
+            let bin_data = fs::read(thumb_binary)?;
             println!("decode a binary!")
         }
     }
+    Ok(())
 }

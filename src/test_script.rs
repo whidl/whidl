@@ -13,6 +13,7 @@ use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
+use std::error::Error;
 
 fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     match input.number_system {
@@ -165,10 +166,10 @@ fn read_cmp(
     Ok(res)
 }
 
-pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
+pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
     // Parse the test script
     let test_pathbuf = PathBuf::from(test_script_path);
-    let test_contents = read_test(&test_pathbuf);
+    let test_contents = read_test(&test_pathbuf)?;
     let mut test_scanner = TestScanner::new(test_contents.as_str(), test_pathbuf.clone());
     let mut test_parser = TestParser {
         scanner: &mut test_scanner,
@@ -283,10 +284,10 @@ pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
             test_script.steps.len()
         );
 
-        return Err(N2VError {
+        return Err(Box::new(N2VError {
             msg: String::from("Test failed."),
             kind: ErrorKind::Other,
-        });
+        }));
     }
 
     println!();
@@ -294,8 +295,8 @@ pub fn run_test(test_script_path: &str) -> Result<(), N2VError> {
     Ok(())
 }
 
-fn read_test(path: &PathBuf) -> String {
-    fs::read_to_string(path).unwrap_or_else(|_| panic!("Unable to read test file {:?}.", path))
+fn read_test(path: &PathBuf) -> Result<String, Box<dyn Error>> {
+    Ok(fs::read_to_string(path)?)
 }
 
 #[cfg(test)]
