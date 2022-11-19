@@ -5,29 +5,28 @@ mod busmap;
 mod error;
 mod expr;
 mod parser;
+mod rom;
 mod scanner;
 pub mod simulator; // hack to deal with dead code warning
 mod test_parser;
 mod test_scanner;
 mod test_script;
 mod vhdl;
-mod rom;
 
-
+use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
 use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_script::run_test;
-use crate::error::{N2VError, ErrorKind};
 use clap::Parser as ArgParser;
 use clap::Subcommand;
 use object::{Object, ObjectSection};
 use parser::Parser;
 use scanner::Scanner;
+use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
-use std::error::Error;
 
 #[derive(ArgParser)]
 #[clap(version)]
@@ -60,14 +59,10 @@ enum Commands {
 
     /// Synthesizes CS 314 ROM from .text section of ELF binary
     /// Does not yet support .data or .bss sections
-    Rom {
-        thumb_binary: String,
-    },
+    Rom { thumb_binary: String },
 
     /// Decodes a thumb binary and prints the .text section as machine cod
-    Decode {
-        thumb_binary: String,
-    }
+    Decode { thumb_binary: String },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -78,7 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             output_dir,
             top_level_file,
         } => {
-            let source_code= fs::read_to_string(&top_level_file)?;
+            let source_code = fs::read_to_string(&top_level_file)?;
             let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
             let mut parser = Parser {
                 scanner: &mut scanner,
@@ -118,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .unwrap(),
             );
             let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?; 
+            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
             let mut simulator = Simulator::new(chip);
 
             // Get all input ports.
@@ -140,14 +135,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             // We don't care what the outputs are, just want to simulate
             // and trigger any dynamic errors.
-            simulator.simulate(&inputs)?; 
+            simulator.simulate(&inputs)?;
 
-            println!("✔️️️    Check Passed"); 
+            println!("✔️️️    Check Passed");
             println!("---------------------");
             println!("Name: {}", &simulator.chip.name);
             println!("Ports:");
             for (port_name, port) in &simulator.chip.ports {
-                println!("\t{}: Direction={:?} Width={}", &port_name, port.direction, port.width);
+                println!(
+                    "\t{}: Direction={:?} Width={}",
+                    &port_name, port.direction, port.width
+                );
             }
             println!("Signals:");
             for signal_name in &simulator.chip.signals.signals() {
@@ -169,15 +167,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             let obj_file = object::File::parse(&*bin_data)?;
 
             if let Some(section) = obj_file.section_by_name(".text") {
-                println!("{:#x?}", section.data()?);
+                let data = section.data()?;
+
+                // little endian-byte order of instructions
+                for d in (1..data.len()).step_by(2) {
+                    let mut bool_vec = crate::rom::u8_to_bools(&data[d]);
+                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d-1]));
+                    println!("{}", crate::rom::bools_bin_str(&bool_vec));
+                }
             } else {
                 return Err(Box::new(N2VError {
                     msg: String::from("Text section is not available."),
                     kind: ErrorKind::Other,
                 }));
             }
-
-            println!("decode a binary!")
         }
     }
     Ok(())
