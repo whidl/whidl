@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 // Convenience for creating a bus with width 1
 impl From<String> for Bus {
@@ -132,6 +133,34 @@ impl std::fmt::Debug for BusMap {
     }
 }
 
+impl std::fmt::Display for BusMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let formatted: Vec<(String, String)> = self
+            .buses
+            .iter()
+            .map(|(key, val)| {
+                let k = key.clone();
+                let v = val
+                    .iter()
+                    .map(|x| match x {
+                        None => String::from("?"),
+                        Some(true) => String::from("1"),
+                        Some(false) => String::from("0"),
+                    })
+                    .collect();
+                (k, v)
+            })
+            .collect();
+
+        let mut s = String::new();
+        for sig in &formatted {
+            writeln!(&mut s, "{}: {}", sig.0, sig.1)?;
+        }
+
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone)]
 pub struct BusMap {
     buses: BTreeMap<String, Box<[Option<bool>]>>,
@@ -166,7 +195,10 @@ impl BusMap {
 
         let current_length = current.len();
         if range.end > current_length {
-            panic!("Attempt to use range {:?} outside of the declared bus width {:?}.", range.end, current_length);
+            panic!(
+                "Attempt to use range {:?} outside of the declared bus width {:?}.",
+                range.end, current_length
+            );
         }
 
         let mut res = vec![None; range.len()];

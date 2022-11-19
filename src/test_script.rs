@@ -258,8 +258,8 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
                 Instruction::Output => {
                     if !(expected[cmp_idx] <= outputs.clone()) {
                         println!("❌ Step: {}", cmp_idx + 1);
-                        println!("Expected: {:?}", expected[cmp_idx]);
-                        println!("Actual: {:?}", outputs);
+                        println!("Expected: {}", expected[cmp_idx]);
+                        println!("Actual: {}", outputs);
                         println!();
                         failures += 1;
                     }

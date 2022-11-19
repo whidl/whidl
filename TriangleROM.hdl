@@ -1,4 +1,4 @@
-t sCHIP ROM0 {
+CHIP HW6ROM0 {
 	IN addr1[3], addr2[3];
 	OUT out1[16], out2[16];
 
