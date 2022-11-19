@@ -174,7 +174,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     instructions.push(bool_vec);
                 }
 
-                crate::rom::create_rom(&instructions);
+                let roms = crate::rom::create_rom(&instructions)?;
+                for rom in roms {
+                    println!("{}", rom);
+                }
             } else {
                 return Err(Box::new(N2VError {
                     msg: String::from("Text section is not available."),

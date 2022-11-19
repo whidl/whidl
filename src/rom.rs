@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt::Write;
+
 pub fn u8_to_bools(byte: &u8) -> Vec<bool> {
     let mut vec: Vec<bool> = Vec::new();
 
@@ -26,13 +29,18 @@ pub fn bools_bin_str(bools: &Vec<bool>) -> String {
     s
 }
 
-pub fn create_rom(bools: &Vec<Vec<bool>>) -> Vec<String> {
+pub fn create_rom(bools: &Vec<Vec<bool>>) -> Result<Vec<String>, Box<dyn Error>> {
     let rom_num = 0;
+
+    let mut roms : Vec<String> = Vec::new();
     for rom_chip in bools.chunks(8) {
-        println!("CHIP ROM{}", rom_num);
+        let mut rom = String::from("");
+        writeln!(&mut rom, "CHIP ROM{}", rom_num)?;
+
+        roms.push(rom);
     }
 
-    Vec::new()
+    Ok(roms)
 }
 
 #[cfg(test)]
