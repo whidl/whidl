@@ -1,0 +1,180 @@
+t sCHIP ROM0 {
+	IN addr1[3], addr2[3];
+	OUT out1[16], out2[16];
+
+	PARTS:
+
+BufferGen<16>(
+	in[0]=true,
+	in[1]=false,
+	in[2]=true,
+	in[3]=false,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=true,
+	in[9]=false,
+	in[10]=false,
+	in[11]=false,
+	in[12]=false,
+	in[13]=true,
+	in[14]=false,
+	in[15]=false,
+	out=rom0
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=false,
+	in[2]=false,
+	in[3]=false,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=false,
+	in[9]=false,
+	in[10]=false,
+	in[11]=false,
+	in[12]=false,
+	in[13]=true,
+	in[14]=false,
+	in[15]=false,
+	out=rom1
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=false,
+	in[2]=false,
+	in[3]=false,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=true,
+	in[9]=false,
+	in[10]=false,
+	in[11]=true,
+	in[12]=false,
+	in[13]=true,
+	in[14]=false,
+	in[15]=false,
+	out=rom2
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=true,
+	in[2]=false,
+	in[3]=false,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=false,
+	in[9]=false,
+	in[10]=false,
+	in[11]=false,
+	in[12]=true,
+	in[13]=false,
+	in[14]=true,
+	in[15]=true,
+	out=rom3
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=false,
+	in[2]=false,
+	in[3]=true,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=false,
+	in[9]=false,
+	in[10]=false,
+	in[11]=true,
+	in[12]=true,
+	in[13]=false,
+	in[14]=false,
+	in[15]=false,
+	out=rom4
+	);
+
+BufferGen<16>(
+	in[0]=true,
+	in[1]=false,
+	in[2]=false,
+	in[3]=false,
+	in[4]=false,
+	in[5]=false,
+	in[6]=false,
+	in[7]=false,
+	in[8]=true,
+	in[9]=false,
+	in[10]=false,
+	in[11]=true,
+	in[12]=true,
+	in[13]=true,
+	in[14]=false,
+	in[15]=false,
+	out=rom5
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=true,
+	in[2]=false,
+	in[3]=true,
+	in[4]=true,
+	in[5]=true,
+	in[6]=true,
+	in[7]=true,
+	in[8]=true,
+	in[9]=true,
+	in[10]=true,
+	in[11]=false,
+	in[12]=false,
+	in[13]=true,
+	in[14]=true,
+	in[15]=true,
+	out=rom6
+	);
+
+BufferGen<16>(
+	in[0]=false,
+	in[1]=true,
+	in[2]=true,
+	in[3]=true,
+	in[4]=true,
+	in[5]=true,
+	in[6]=true,
+	in[7]=true,
+	in[8]=true,
+	in[9]=true,
+	in[10]=true,
+	in[11]=false,
+	in[12]=false,
+	in[13]=true,
+	in[14]=true,
+	in[15]=true,
+	out=rom7
+	);
+
+	Mux8Way<16>(
+		in000=rom0, in001=rom1, in010=rom2, in011=rom3,
+		in100=rom4, in101=rom5, in110=rom6, in111=rom7,
+		sel=addr1[0..2],
+		out=out1
+	);
+	Mux8Way<16>(
+		in000=rom0, in001=rom1, in010=rom2, in011=rom3,
+		in100=rom4, in101=rom5, in110=rom6, in111=rom7,
+		sel=addr2[0..2],
+		out=out2
+	);
+}
+

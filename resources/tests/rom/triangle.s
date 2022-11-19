@@ -7,7 +7,7 @@ _start:
 
 loop:
     cmp r1, #0
-    beq end
+    beq done
     add r0, r1, r0
     sub r1, r1, #1
     b loop

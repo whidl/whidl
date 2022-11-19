@@ -167,10 +167,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let data = section.data()?;
 
                 let mut instructions : Vec<Vec<bool>> = Vec::new();
-                // little endian-byte order of instructions
                 for d in (1..data.len()).step_by(2) {
-                    let mut bool_vec = crate::rom::u8_to_bools(&data[d]);
-                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d-1]));
+                    let mut bool_vec = crate::rom::u8_to_bools(&data[d-1]);
+                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d]));
                     instructions.push(bool_vec);
                 }
 
@@ -192,10 +191,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             if let Some(section) = obj_file.section_by_name(".text") {
                 let data = section.data()?;
 
-                // little endian-byte order of instructions
                 for d in (1..data.len()).step_by(2) {
-                    let mut bool_vec = crate::rom::u8_to_bools(&data[d]);
-                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d-1]));
+                    let mut bool_vec = crate::rom::u8_to_bools(&data[d-1]);
+                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d]));
                     println!("{}", crate::rom::bools_bin_str(&bool_vec));
                 }
             } else {

@@ -13,27 +13,35 @@ pub fn u8_to_bools(byte: &u8) -> Vec<bool> {
         }
     }
 
+    vec.reverse();
     vec
 }
 
-pub fn bools_bin_str(bools: &Vec<bool>) -> String {
-    let mut s = String::from("");
-    for b in bools {
-        if *b {
-            s.push('1');
-        } else {
-            s.push('0');
-        }
-    }
-
-    s
+pub fn bools_bin_str(bools: &[bool]) -> String {
+    let mut ones_zeros: Vec<String> = bools
+        .iter()
+        .map(|b| {
+            if *b {
+                String::from("1")
+            } else {
+                String::from("0")
+            }
+        })
+        .collect();
+    ones_zeros.reverse();
+    ones_zeros.join("")
 }
 
 pub fn create_rom(bools: &Vec<Vec<bool>>) -> Result<Vec<String>, Box<dyn Error>> {
     let rom_num = 0;
 
+    let mut padded_bools = bools.clone();
+    for _ in 0..(bools.len() % 8) {
+        padded_bools.push(Vec::from([false; 16]));
+    }
+
     let mut roms: Vec<String> = Vec::new();
-    for rom_chip in bools.chunks(8) {
+    for rom_chip in padded_bools.chunks(8) {
         let mut rom = String::from("");
         writeln!(&mut rom, "CHIP ROM{} {{", rom_num)?;
         writeln!(&mut rom, "\tIN addr1[3], addr2[3];")?;
@@ -45,13 +53,40 @@ pub fn create_rom(bools: &Vec<Vec<bool>>) -> Result<Vec<String>, Box<dyn Error>>
             let port_mappings: Vec<String> = inst
                 .iter()
                 .enumerate()
-                .map(|(bit_idx, bit)| format!("in[{bit_idx}]={bit}"))
+                .map(|(bit_idx, bit)| format!("in[{bit_idx}]={bit},\n\t"))
                 .collect();
 
-            writeln!(&mut rom, "{}", port_mappings.join(",\n\t"))?;
-            writeln!(&mut rom, "\tout=rom{}", inst_idx)?;
+            write!(&mut rom, "{}", port_mappings.join(""))?;
+            writeln!(&mut rom, "out=rom{}", inst_idx)?;
             writeln!(&mut rom, "\t);\n")?;
         }
+
+        writeln!(&mut rom, "\tMux8Way<16>(")?;
+        writeln!(
+            &mut rom,
+            "\t\tin000=rom0, in001=rom1, in010=rom2, in011=rom3,"
+        )?;
+        writeln!(
+            &mut rom,
+            "\t\tin100=rom4, in101=rom5, in110=rom6, in111=rom7,"
+        )?;
+        writeln!(&mut rom, "\t\tsel=addr1[0..2],")?;
+        writeln!(&mut rom, "\t\tout=out1")?;
+        writeln!(&mut rom, "\t);")?;
+
+        writeln!(&mut rom, "\tMux8Way<16>(")?;
+        writeln!(
+            &mut rom,
+            "\t\tin000=rom0, in001=rom1, in010=rom2, in011=rom3,"
+        )?;
+        writeln!(
+            &mut rom,
+            "\t\tin100=rom4, in101=rom5, in110=rom6, in111=rom7,"
+        )?;
+        writeln!(&mut rom, "\t\tsel=addr2[0..2],")?;
+        writeln!(&mut rom, "\t\tout=out2")?;
+        writeln!(&mut rom, "\t);")?;
+
         writeln!(&mut rom, "}}")?;
 
         roms.push(rom);
