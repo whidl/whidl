@@ -32,10 +32,27 @@ pub fn bools_bin_str(bools: &Vec<bool>) -> String {
 pub fn create_rom(bools: &Vec<Vec<bool>>) -> Result<Vec<String>, Box<dyn Error>> {
     let rom_num = 0;
 
-    let mut roms : Vec<String> = Vec::new();
+    let mut roms: Vec<String> = Vec::new();
     for rom_chip in bools.chunks(8) {
         let mut rom = String::from("");
-        writeln!(&mut rom, "CHIP ROM{}", rom_num)?;
+        writeln!(&mut rom, "CHIP ROM{} {{", rom_num)?;
+        writeln!(&mut rom, "\tIN addr1[3], addr2[3];")?;
+        writeln!(&mut rom, "\tOUT out1[16], out2[16];\n")?;
+        writeln!(&mut rom, "\tPARTS:\n")?;
+
+        for (inst_idx, inst) in rom_chip.iter().enumerate() {
+            write!(&mut rom, "BufferGen<16>(\n\t")?;
+            let port_mappings: Vec<String> = inst
+                .iter()
+                .enumerate()
+                .map(|(bit_idx, bit)| format!("in[{bit_idx}]={bit}"))
+                .collect();
+
+            writeln!(&mut rom, "{}", port_mappings.join(",\n\t"))?;
+            writeln!(&mut rom, "\tout=rom{}", inst_idx)?;
+            writeln!(&mut rom, "\t);\n")?;
+        }
+        writeln!(&mut rom, "}}")?;
 
         roms.push(rom);
     }
@@ -54,7 +71,7 @@ mod romtest {
         let expected = Vec::from([false, false, false, false, false, false, false, false]);
         assert_eq!(output, expected);
     }
-    
+
     #[test]
     fn test_u8_to_bools_1() {
         let input: u8 = 1;
@@ -70,7 +87,7 @@ mod romtest {
         let expected = Vec::from([false, false, false, false, false, false, true, false]);
         assert_eq!(output, expected);
     }
-    
+
     #[test]
     fn test_u8_to_bools_3() {
         let input: u8 = 3;
