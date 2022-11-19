@@ -160,7 +160,27 @@ fn main() -> Result<(), Box<dyn Error>> {
             run_test(test_file)?;
         }
         Commands::Rom { thumb_binary } => {
-            println!("synth a ROM!")
+            let bin_data = fs::read(thumb_binary)?;
+            let obj_file = object::File::parse(&*bin_data)?;
+
+            if let Some(section) = obj_file.section_by_name(".text") {
+                let data = section.data()?;
+
+                let mut instructions : Vec<Vec<bool>> = Vec::new();
+                // little endian-byte order of instructions
+                for d in (1..data.len()).step_by(2) {
+                    let mut bool_vec = crate::rom::u8_to_bools(&data[d]);
+                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d-1]));
+                    instructions.push(bool_vec);
+                }
+
+                crate::rom::create_rom(&instructions);
+            } else {
+                return Err(Box::new(N2VError {
+                    msg: String::from("Text section is not available."),
+                    kind: ErrorKind::Other,
+                }));
+            }
         }
         Commands::Decode { thumb_binary } => {
             let bin_data = fs::read(thumb_binary)?;

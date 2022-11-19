@@ -26,6 +26,15 @@ pub fn bools_bin_str(bools: &Vec<bool>) -> String {
     s
 }
 
+pub fn create_rom(bools: &Vec<Vec<bool>>) -> Vec<String> {
+    let rom_num = 0;
+    for rom_chip in bools.chunks(8) {
+        println!("CHIP ROM{}", rom_num);
+    }
+
+    Vec::new()
+}
+
 #[cfg(test)]
 mod romtest {
     use super::*;
