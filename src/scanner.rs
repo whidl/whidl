@@ -111,10 +111,8 @@ impl<'a> Scanner<'a> {
     pub fn peek(&mut self) -> Option<Token> {
         if self.peeked.is_none() {
             self.peeked = self.scan_token();
-            return self.peeked.clone();
-        } else {
-            return self.peeked.clone();
         }
+        self.peeked.clone()
     }
 
     pub fn scan_token(&mut self) -> Option<Token> {
