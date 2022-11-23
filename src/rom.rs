@@ -111,7 +111,7 @@ mod romtest {
     fn test_u8_to_bools_1() {
         let input: u8 = 1;
         let output = u8_to_bools(&input);
-        let expected = Vec::from([false, false, false, false, false, false, false, true]);
+        let expected = Vec::from([true, false, false, false, false, false, false, false]);
         assert_eq!(output, expected);
     }
 
@@ -119,7 +119,7 @@ mod romtest {
     fn test_u8_to_bools_2() {
         let input: u8 = 2;
         let output = u8_to_bools(&input);
-        let expected = Vec::from([false, false, false, false, false, false, true, false]);
+        let expected = Vec::from([false, true, false, false, false, false, false, false]);
         assert_eq!(output, expected);
     }
 
@@ -127,7 +127,7 @@ mod romtest {
     fn test_u8_to_bools_3() {
         let input: u8 = 3;
         let output = u8_to_bools(&input);
-        let expected = Vec::from([false, false, false, false, false, false, true, true]);
+        let expected = Vec::from([true, true, false, false, false, false, false, false]);
         assert_eq!(output, expected);
     }
 
@@ -135,7 +135,7 @@ mod romtest {
     fn test_u8_to_bools_128() {
         let input: u8 = 128;
         let output = u8_to_bools(&input);
-        let expected = Vec::from([true, false, false, false, false, false, false, false]);
+        let expected = Vec::from([false, false, false, false, false, false, false, true]);
         assert_eq!(output, expected);
     }
 
@@ -165,7 +165,7 @@ mod romtest {
 
     #[test]
     fn test_bools_bin_str_3() {
-        let input = Vec::from([false, false, false, false, false, false, true, true]);
+        let input = Vec::from([true, true, false, false, false, false, false, false]);
         let output = bools_bin_str(&input);
         let expected = String::from("00000011");
         assert_eq!(output, expected);
