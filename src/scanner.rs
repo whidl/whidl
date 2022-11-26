@@ -109,25 +109,14 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn peek(&mut self) -> Option<Token> {
-        let token = self.scan_token();
-
-        match token {
-            None => None,
-            Some(t) => {
-                self.peeked = Some(t);
-                self.peeked.clone()
-            }
+        if self.peeked.is_none() {
+            self.peeked = self.scan_token();
         }
+        self.peeked.clone()
     }
 
     pub fn scan_token(&mut self) -> Option<Token> {
-        let mut token: Option<Token> = match self.peeked.clone() {
-            None => None,
-            Some(t) => {
-                self.peeked = None;
-                Some(t)
-            }
-        };
+        let mut token: Option<Token> = None;
 
         while token.is_none() && self.source_chars.peek().is_some() {
             self.col += 1;
@@ -396,7 +385,13 @@ impl<'a> Iterator for Scanner<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.scan_token()
+        if self.peeked.is_some() {
+            let p = self.peeked.clone();
+            self.peeked = None;
+            p
+        } else {
+            self.scan_token()
+        }
     }
 }
 
