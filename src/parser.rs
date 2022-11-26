@@ -4,6 +4,7 @@ use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::Scanner;
 use serde::Serialize;
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -161,7 +162,7 @@ pub struct PortMapping {
 /// Looks up chip definition for a chip.
 /// name is the name of the chip, not including .hdl extension
 /// provider is responsible for retrieving the HDL file (provider will have its own base path)
-pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, N2VError> {
+pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Box<dyn Error>> {
     if name.to_lowercase() == "nand" {
         // Hard-coded NAND chip
         return Ok(ChipHDL {
@@ -225,14 +226,14 @@ pub struct Parser<'a, 'b> {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-    pub fn parse(&mut self) -> Result<ChipHDL, N2VError> {
+    pub fn parse(&mut self) -> Result<ChipHDL, Box<dyn Error>> {
         self.chip()
     }
 
-    fn consume(&mut self, tt: TokenType) -> Result<Token, N2VError> {
+    fn consume(&mut self, tt: TokenType) -> Result<Token, Box<dyn Error>> {
         let t = self.scanner.next();
         match &t {
-            None => Err(N2VError {
+            None => Err(Box::new(N2VError {
                 msg: format!("Early end of file, expected {}", tt),
                 kind: ErrorKind::ParseError(Token {
                     lexeme: String::from(""),
@@ -241,24 +242,24 @@ impl<'a, 'b> Parser<'a, 'b> {
                     start: self.scanner.col,
                     token_type: TokenType::Eof,
                 }),
-            }),
+            })),
             Some(t) => {
                 if t.token_type == tt {
                     Ok(t.clone())
                 } else {
-                    Err(N2VError {
+                    Err(Box::new(N2VError {
                         msg: format!(
                             "I did not expect to see `{}`. I expected to see {}",
                             t.lexeme, tt
                         ),
                         kind: ErrorKind::ParseError(t.clone()),
-                    })
+                    }))
                 }
             }
         }
     }
 
-    fn chip(&mut self) -> Result<ChipHDL, N2VError> {
+    fn chip(&mut self) -> Result<ChipHDL, Box<dyn Error>> {
         // TODO: Print location information for token.
         self.consume(TokenType::Chip)?;
         let chip_name = self.consume(TokenType::Identifier)?;
@@ -290,7 +291,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn generics(&mut self) -> Result<Vec<GenericWidth>, N2VError> {
+    fn generics(&mut self) -> Result<Vec<GenericWidth>, Box<dyn Error>> {
         let mut res: Vec<GenericWidth> = Vec::new();
 
         if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {
@@ -336,7 +337,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     return Ok(res);
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: format!(
                             "Expected identifier, number, comma, or right angle, found {}",
                             match &next {
@@ -345,10 +346,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                             }
                         ),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from(
                             "Unexpected end of file. Expected number, comma, or right angle.",
                         ),
@@ -359,13 +360,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }
     }
 
-    fn generic_decls(&mut self) -> Result<Vec<Identifier>, N2VError> {
+    fn generic_decls(&mut self) -> Result<Vec<Identifier>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {
@@ -401,13 +402,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     return Ok(res);
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Expected identifier, comma, or right angle"),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from(
                             "Unexpected end of file. Expected identifier, comma, or right angle.",
                         ),
@@ -418,13 +419,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }
     }
 
-    fn port_names(&mut self, direction: PortDirection) -> Result<Vec<GenericPort>, N2VError> {
+    fn port_names(&mut self, direction: PortDirection) -> Result<Vec<GenericPort>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         loop {
@@ -456,13 +457,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     return Ok(res);
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Expected identifier, comma, or semicolon."),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from(
                             "Unexpected end of file. Expected identifier, comma, or semicolon.",
                         ),
@@ -473,14 +474,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }
     }
 
     // Parses a list of components (parts). This list may contain for-generate loops.
-    fn parts(&mut self) -> Result<Vec<Part>, N2VError> {
+    fn parts(&mut self) -> Result<Vec<Part>, Box<dyn Error>> {
         let mut parts: Vec<Part> = Vec::new();
 
         loop {
@@ -506,13 +507,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     break;
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Expected identifier, FOR, or right curly."),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from(
                             "Unexpected end of file. Expected identifier, FOR, or right curly.",
                         ),
@@ -523,7 +524,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }
@@ -532,7 +533,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     // Same as parts but does not allow for-generate loops.
-    fn components(&mut self) -> Result<Vec<Component>, N2VError> {
+    fn components(&mut self) -> Result<Vec<Component>, Box<dyn Error>> {
         let mut parts: Vec<Component> = Vec::new();
 
         loop {
@@ -552,13 +553,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     break;
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Expected Identifier or right curly."),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from(
                             "Unexpected end of file. Expected identifier or right curly.",
                         ),
@@ -569,7 +570,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }
@@ -577,7 +578,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(parts)
     }
 
-    fn for_loop(&mut self) -> Result<Loop, N2VError> {
+    fn for_loop(&mut self) -> Result<Loop, Box<dyn Error>> {
         self.consume(TokenType::For)?;
         let iterator = Identifier::from(self.consume(TokenType::Identifier)?);
         self.consume(TokenType::In)?;
@@ -596,7 +597,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn expr(&mut self) -> Result<GenericWidth, N2VError> {
+    fn expr(&mut self) -> Result<GenericWidth, Box<dyn Error>> {
         let t1 = self.terminal()?;
 
         let peeked = self.scanner.peek().unwrap();
@@ -621,22 +622,22 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn terminal(&mut self) -> Result<Terminal, N2VError> {
+    fn terminal(&mut self) -> Result<Terminal, Box<dyn Error>> {
         let width_token = self.scanner.next().unwrap();
         let width = match width_token.token_type {
             TokenType::Number => Terminal::Num(width_token.lexeme.parse::<usize>().unwrap()),
             TokenType::Identifier => Terminal::Var(Identifier::from(width_token)),
             _ => {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: String::from("Expected number or generic var for port width."),
                     kind: ErrorKind::ParseError(width_token),
-                });
+                }));
             }
         };
         Ok(width)
     }
 
-    fn component(&mut self) -> Result<Component, N2VError> {
+    fn component(&mut self) -> Result<Component, Box<dyn Error>> {
         Ok(Component {
             name: Identifier::from(self.scanner.next().unwrap()),
             generic_params: self.generics()?,
@@ -644,7 +645,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn port_width(&mut self) -> Result<GenericWidth, N2VError> {
+    fn port_width(&mut self) -> Result<GenericWidth, Box<dyn Error>> {
         let peeked = self.scanner.peek().unwrap();
         if peeked.token_type != TokenType::LeftBracket {
             return Ok(GenericWidth::Terminal(Terminal::Num(1)));
@@ -657,7 +658,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(width)
     }
 
-    fn bus_idx(&mut self) -> Result<(Option<GenericWidth>, Option<GenericWidth>), N2VError> {
+    fn bus_idx(&mut self) -> Result<(Option<GenericWidth>, Option<GenericWidth>), Box<dyn Error>> {
         let peeked = self.scanner.peek();
 
         if let Token {
@@ -687,7 +688,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn port_mappings(&mut self) -> Result<Vec<PortMapping>, N2VError> {
+    fn port_mappings(&mut self) -> Result<Vec<PortMapping>, Box<dyn Error>> {
         let mut mappings = Vec::new();
 
         self.consume(TokenType::LeftParen)?;
@@ -725,10 +726,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                         _ => {
                             let found_t = self.scanner.peek().unwrap();
                             let found = found_t.lexeme.clone();
-                            return Err(N2VError {
+                            return Err(Box::new(N2VError {
                                 msg: format!("Expected comma or right paren, found {}", found),
                                 kind: ErrorKind::ParseError(found_t),
-                            });
+                            }));
                         }
                     }
                 }
@@ -745,13 +746,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     break;
                 }
                 Some(t) => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Expected comma, or right paren"),
                         kind: ErrorKind::ParseError(t.clone()),
-                    });
+                    }));
                 }
                 None => {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: String::from("Unexpected end of file. Expected comma or right paren."),
                         kind: ErrorKind::ParseError(Token {
                             lexeme: String::from(""),
@@ -760,7 +761,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                             start: self.scanner.col,
                             token_type: TokenType::Eof,
                         }),
-                    });
+                    }));
                 }
             }
         }

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 use std::rc::Rc;
@@ -54,7 +55,7 @@ impl Simulator {
         }
     }
 
-    pub fn simulate(&mut self, inputs: &BusMap) -> Result<BusMap, N2VError> {
+    pub fn simulate(&mut self, inputs: &BusMap) -> Result<BusMap, Box<dyn Error>> {
         let ports = self.chip.ports.clone();
         for (port_name, port) in ports {
             if port.direction == PortDirection::Out {
@@ -77,7 +78,7 @@ impl Simulator {
     }
 
     // Tick advances the clock without changing the inputs to the chip.
-    pub fn tick(&mut self) -> Result<(), N2VError> {
+    pub fn tick(&mut self) -> Result<(), Box<dyn Error>> {
         let dffs_this_tick = self.dirty_dffs.clone();
         self.dirty_dffs.clear();
         let mut parents = Vec::new();
@@ -188,7 +189,7 @@ impl Chip {
         hdl_provider: &Rc<dyn HdlProvider>,
         elaborate: bool,
         generics: &Vec<usize>, // generic args when this chip is being created.
-    ) -> Result<Chip, N2VError> {
+    ) -> Result<Chip, Box<dyn Error>> {
         let circuit = Circuit::new();
 
         if hdl.name.to_uppercase() == "NAND" {
@@ -199,7 +200,7 @@ impl Chip {
 
         // Assign values to generic variables.
         if generics.len() != hdl.generic_decls.len() {
-            return Err(N2VError {
+            return Err(Box::new(N2VError {
                 msg: format!(
                     "Chip {} declares {} generics but instantiated with {}",
                     hdl.name,
@@ -207,7 +208,7 @@ impl Chip {
                     generics.len()
                 ),
                 kind: ErrorKind::SimulationError(hdl.path.clone()),
-            });
+            }));
         }
         let mut variables = HashMap::new();
 
@@ -225,10 +226,10 @@ impl Chip {
             let width = eval_expr_numeric(&port.width, &variables)?;
 
             if let Err(e) = signals.create_bus(&port.name.value, width) {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: { format!("Cannot create port {}: {}", port.name.value, e) },
                     kind: ErrorKind::ParseIdentError(hdl_provider.clone(), port.name.clone()),
-                });
+                }));
             }
         }
 
@@ -240,6 +241,7 @@ impl Chip {
             .map(|x| GenericWidth::Terminal(Terminal::Num(*x)))
             .collect();
         let inferred_widths = infer_widths(hdl, &components, hdl_provider, &general_generics)?;
+        check_duplicate_signals(&components)?;
 
         // Create disconnected internal signals.
         // These are connected below.
@@ -247,7 +249,7 @@ impl Chip {
             // To create a full chip we need only numeric expressions.
             if let GenericWidth::Terminal(Terminal::Num(x)) = iw {
                 if let Err(e) = signals.create_bus(&n, x) {
-                    return Err(N2VError {
+                    return Err(Box::new(N2VError {
                         msg: {
                             format!(
                                 "{:?} Cannot create internal signal {} of width {}. {}",
@@ -255,10 +257,10 @@ impl Chip {
                             )
                         },
                         kind: ErrorKind::SimulationError(hdl.path.clone()),
-                    });
+                    }));
                 }
             } else {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: {
                         format!(
                             "{:?} Cannot create internal signal {} of width {}.",
@@ -266,7 +268,7 @@ impl Chip {
                         )
                     },
                     kind: ErrorKind::SimulationError(hdl.path.clone()),
-                });
+                }));
             }
         }
 
@@ -379,7 +381,7 @@ impl Chip {
         Ok(res)
     }
 
-    fn elaborate(&mut self) -> Result<(), N2VError> {
+    fn elaborate(&mut self) -> Result<(), Box<dyn Error>> {
         let self_ptr = self as *mut Chip;
         self.elaborated = true;
         if self.hdl.is_none() {
@@ -786,7 +788,7 @@ impl Chip {
         &mut self,
         input_cache: &mut Cache,
         dirty_dffs: &mut Vec<*mut Chip>,
-    ) -> Result<(), N2VError> {
+    ) -> Result<(), Box<dyn Error>> {
         while self.dirty {
             self.dirty = false;
 
@@ -1206,10 +1208,10 @@ pub fn infer_widths(
     components: &Vec<Component>,
     provider: &Rc<dyn HdlProvider>,
     generics: &Vec<GenericWidth>,
-) -> Result<HashMap<String, GenericWidth>, N2VError> {
+) -> Result<HashMap<String, GenericWidth>, Box<dyn Error>> {
     // Assign values to generic variables.
     if generics.len() > hdl.generic_decls.len() {
-        return Err(N2VError {
+        return Err(Box::new(N2VError {
             msg: format!(
                 "Chip {} declares {} generics but instantiated with {}",
                 hdl.name,
@@ -1217,7 +1219,7 @@ pub fn infer_widths(
                 generics.len()
             ),
             kind: ErrorKind::SimulationError(hdl.path.clone()),
-        });
+        }));
     }
     let mut variables = HashMap::new();
 
@@ -1306,11 +1308,11 @@ pub fn infer_widths(
                     // wire range none, port range none, width some => verify width = port width
                     (None, None, Some(w)) => {
                         if w.is_numeric() && w != &port_width {
-                            return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
+                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
                     }
 
@@ -1322,11 +1324,11 @@ pub fn infer_widths(
                     // wire range none, port range some, width some => verify width same as port range
                     (None, Some(pr), Some(w)) => {
                         if w.is_numeric() && w != &(&pr.end - &pr.start) {
-                            return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
+                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &pr.end - &pr.start
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
                     }
 
@@ -1336,11 +1338,11 @@ pub fn infer_widths(
                             && wr.start.is_numeric()
                             && (&wr.end - &wr.start) != port_width
                         {
-                            return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
+                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
                     }
@@ -1351,11 +1353,11 @@ pub fn infer_widths(
                             && wr.start.is_numeric()
                             && (&wr.end - &wr.start) != port_width
                         {
-                            return Err(N2VError { msg: format!("Chip `{}` component `{}` wire range of signal `{}` is {}, not equal port `{}` width, which is {}.",
+                            return Err(Box::new(N2VError { msg: format!("Chip `{}` component `{}` wire range of signal `{}` is {}, not equal port `{}` width, which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
                         let max_width = eval_expr(
                             &GenericWidth::Expr(
@@ -1376,11 +1378,11 @@ pub fn infer_widths(
                             && pr.start.is_numeric()
                             && (&wr.end - &wr.start) != (&pr.end - &pr.start)
                         {
-                            return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
+                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
                         inferred_widths.insert(m.wire.name.clone(), wr.end.clone());
                     }
@@ -1393,12 +1395,12 @@ pub fn infer_widths(
                             && pr.start.is_numeric()
                             && (&wr.end - &wr.start) != (&pr.end - &pr.start)
                         {
-                            return Err(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
+                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} range which is {}.",
                                 &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, (&pr.end - &pr.start)
                             ),
                             //line: m.wire_ident.line,
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        });
+                        }));
                         }
 
                         let max_width = eval_expr(
@@ -1417,6 +1419,25 @@ pub fn infer_widths(
     }
 
     Ok(inferred_widths)
+}
+
+/// Checks that each bit of each signal has only one source.
+/// See https://github.com/whidl/whidl/issues/9
+pub fn check_duplicate_signals(components: &Vec<Component>) -> Result<(), Box<dyn Error>> {
+    enum SeenBits {
+        All,
+        Some(Vec<usize>),
+    }
+
+    // Keep a set of (signal, bit) pairs, using algebraic type for the bit?
+    // When wire side of mapping has no range, set bit type to All
+    let seen_signal_bits: HashMap<String, SeenBits> = HashMap::new();
+
+    for part in components {}
+
+    // Go through each port mapping
+    // If we already have a source for this bit or All then error
+    Ok(())
 }
 
 fn nand(a: Option<bool>, b: Option<bool>) -> Option<bool> {
@@ -2023,6 +2044,32 @@ mod test {
 
     #[test]
     fn test_optimize_circuit_inc16() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let base_path = String::from(
+            manifest_dir
+                .join("resources")
+                .join("tests")
+                .join("nand2tetris")
+                .join("solutions")
+                .to_str()
+                .unwrap(),
+        );
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+        let contents = provider.get_hdl("Inc16.hdl").unwrap();
+        let mut scanner = Scanner::new(contents.as_str(), provider.get_path("Inc16.hdl"));
+        let mut parser = Parser {
+            scanner: &mut scanner,
+        };
+        let hdl = parser.parse().expect("Parse error");
+        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
+            .expect("Chip creation error");
+        assert_eq!(chip.circuit.edge_count(), 4);
+    }
+
+    // Tests that multiple assignments to the same bit of a signal produce
+    // an error. See https://github.com/whidl/whidl/issues/9
+    #[test]
+    fn test_assign_multiple_error() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let base_path = String::from(
             manifest_dir
