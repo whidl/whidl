@@ -2067,20 +2067,42 @@ mod test {
             manifest_dir
                 .join("resources")
                 .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
+                .join("bad")
                 .to_str()
                 .unwrap(),
         );
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-        let contents = provider.get_hdl("Inc16.hdl").unwrap();
-        let mut scanner = Scanner::new(contents.as_str(), provider.get_path("Inc16.hdl"));
+        let contents = provider.get_hdl("TwoAssign.hdl").unwrap();
+        let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
         let mut parser = Parser {
             scanner: &mut scanner,
         };
         let hdl = parser.parse().expect("Parse error");
-        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
-            .expect("Chip creation error");
-        assert_eq!(chip.circuit.edge_count(), 4);
+        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
+        assert!(chip.is_err());
+    }
+
+    // Tests that multiple assignments to the same bit of a signal produce
+    // an error. See https://github.com/whidl/whidl/issues/9
+    #[test]
+    fn test_assign_multiple_ok() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let base_path = String::from(
+            manifest_dir
+                .join("resources")
+                .join("tests")
+                .join("bad")
+                .to_str()
+                .unwrap(),
+        );
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+        let contents = provider.get_hdl("TwoAssignOK.hdl").unwrap();
+        let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssignOK.hdl"));
+        let mut parser = Parser {
+            scanner: &mut scanner,
+        };
+        let hdl = parser.parse().expect("Parse error");
+        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
+        assert!(chip.is_ok());
     }
 }

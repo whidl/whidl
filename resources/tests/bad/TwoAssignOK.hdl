@@ -1,0 +1,10 @@
+// Should not produce an error because separate bits of the signal are
+// being used.
+CHIP TwoAssignOK {
+    IN a, b;
+    OUT out;
+
+    PARTS:
+    And(a=a, b=b, out=foo[0]);
+    Not(in=a, out=foo[1], out=out);
+}
