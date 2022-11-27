@@ -241,7 +241,6 @@ impl Chip {
             .map(|x| GenericWidth::Terminal(Terminal::Num(*x)))
             .collect();
         let inferred_widths = infer_widths(hdl, &components, hdl_provider, &general_generics)?;
-        check_duplicate_signals(&components)?;
 
         // Create disconnected internal signals.
         // These are connected below.
@@ -1419,25 +1418,6 @@ pub fn infer_widths(
     }
 
     Ok(inferred_widths)
-}
-
-/// Checks that each bit of each signal has only one source.
-/// See https://github.com/whidl/whidl/issues/9
-pub fn check_duplicate_signals(components: &Vec<Component>) -> Result<(), Box<dyn Error>> {
-    enum SeenBits {
-        All,
-        Some(Vec<usize>),
-    }
-
-    // Keep a set of (signal, bit) pairs, using algebraic type for the bit?
-    // When wire side of mapping has no range, set bit type to All
-    let seen_signal_bits: HashMap<String, SeenBits> = HashMap::new();
-
-    for part in components {}
-
-    // Go through each port mapping
-    // If we already have a source for this bit or All then error
-    Ok(())
 }
 
 fn nand(a: Option<bool>, b: Option<bool>) -> Option<bool> {
