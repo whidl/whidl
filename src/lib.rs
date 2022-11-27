@@ -7,13 +7,14 @@ pub mod simulator;
 mod test_scanner;
 
 use crate::busmap::BusMap;
-use crate::error::{N2VError, ErrorKind};
+use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
 use crate::simulator::{Chip, Simulator};
 use expr::*;
 use rust_embed::RustEmbed;
 use scanner::Scanner;
 use std::collections::HashMap;
+use std::error::Error;
 use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
@@ -55,13 +56,13 @@ pub fn simulate(s: &str, inputs: &str) -> Result<String, JsValue> {
 
     let hdl = match parser.parse() {
         Ok(x) => x,
-        Err(e) => return Err(JsValue::from(e.msg)),
+        Err(e) => return Err(JsValue::from(e.to_string())),
     };
 
     let provider: Rc<dyn HdlProvider> = Rc::new(EmbedReader);
     let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new()) {
         Ok(x) => x,
-        Err(e) => return Err(JsValue::from(e.msg)),
+        Err(e) => return Err(JsValue::from(e.to_string())),
     };
     let mut simulator = Simulator::new(chip);
     let chip_inputs: HashMap<String, Vec<bool>> = serde_json::from_str(inputs)
@@ -76,7 +77,7 @@ pub fn full_table(s: &str) -> Result<String, JsValue> {
     let table = match full_table_internal(s, Rc::new(EmbedReader)) {
         Ok(x) => x,
         Err(e) => {
-            return Err(JsValue::from(e.msg));
+            return Err(JsValue::from(e.to_string()));
         }
     };
     Ok(serde_json::to_string(&table).unwrap())
@@ -88,7 +89,7 @@ type Table = Vec<Vec<Vec<Option<bool>>>>;
 pub fn full_table_internal(
     s: &str,
     provider: Rc<dyn HdlProvider>,
-) -> Result<(Vec<String>, Table), N2VError> {
+) -> Result<(Vec<String>, Table), Box<dyn Error>> {
     let mut scanner = Scanner::new(s, PathBuf::from(""));
     let mut parser = Parser {
         scanner: &mut scanner,
@@ -96,7 +97,7 @@ pub fn full_table_internal(
 
     let hdl = match parser.parse() {
         Ok(x) => x,
-        Err(e) => { return Err(e) },
+        Err(e) => return Err(e),
     };
 
     let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
@@ -122,10 +123,10 @@ pub fn full_table_internal(
     let total_rows = base.pow(*total_width as u32);
 
     if total_rows > 1024 {
-        return Err(N2VError {
+        return Err(Box::new(N2VError {
             msg: String::from("Too many rows in truth table to display (max 32)."),
             kind: ErrorKind::Other,
-        });
+        }));
     }
 
     for i in 0..total_rows {
@@ -160,10 +161,10 @@ pub fn full_table_internal(
         let inputs = match BusMap::try_from(m) {
             Ok(x) => x,
             Err(s) => {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: s,
                     kind: ErrorKind::Other,
-                });
+                }));
             }
         };
         let outputs = simulator.simulate(&inputs)?;
@@ -189,7 +190,7 @@ pub fn component_graphs(s: &str) -> Result<String, JsValue> {
     let hdl = match parser.parse() {
         Ok(x) => x,
         Err(e) => {
-            return Err(JsValue::from(&e.msg));
+            return Err(JsValue::from(&e.to_string()));
         }
     };
 
@@ -197,7 +198,7 @@ pub fn component_graphs(s: &str) -> Result<String, JsValue> {
     let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new()) {
         Ok(x) => x,
         Err(e) => {
-            return Err(JsValue::from(&e.msg));
+            return Err(JsValue::from(&e.to_string()));
         }
     };
 

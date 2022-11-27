@@ -8,12 +8,12 @@ use crate::test_parser::*;
 use crate::test_scanner::TestScanner;
 use bitvec::prelude::*;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fs;
 use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
-use std::error::Error;
 
 fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     match input.number_system {

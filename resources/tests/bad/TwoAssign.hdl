@@ -1,0 +1,9 @@
+// Should produce an error because multiple chips are writing out to foo signal.
+CHIP TwoAssign {
+    IN a, b;
+    OUT out;
+
+    PARTS:
+    And(a=a, b=b, out=foo);
+    Not(in=a, out=foo, out=out);
+}

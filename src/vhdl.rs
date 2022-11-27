@@ -2,6 +2,7 @@
 // producing equivalent VHDL code.
 
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
@@ -336,7 +337,12 @@ fn ports(chip: &ChipHDL) -> String {
         ports.push(port_vhdl);
     }
 
-    writeln!(&mut vhdl, "port (CLOCK_50 : in std_logic; {});", ports.join(";\n")).unwrap();
+    writeln!(
+        &mut vhdl,
+        "port (CLOCK_50 : in std_logic; {});",
+        ports.join(";\n")
+    )
+    .unwrap();
 
     vhdl
 }
@@ -445,7 +451,7 @@ fn keyw(name: &str) -> String {
 pub fn synth_vhdl(
     hdl: &ChipHDL,
     provider: &Rc<dyn HdlProvider>,
-) -> Result<HashMap<String, String>, N2VError> {
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
     // We don't want to make a chip for simulation, because we might have
     // top-level generics. We aren't simulating the chip, we are translating
     // the HDL to VHDL.
@@ -768,7 +774,7 @@ fn write_top_level_entity(hdl: &ChipHDL, top_level_vhdl: &mut String) {
 fn generate_component_definition(
     component: &Component,
     provider: &Rc<dyn HdlProvider>,
-) -> Result<HashMap<String, String>, N2VError> {
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
     // We skip NAND because that is hard-coded and will be copied separately.
     if &component.name.value.to_lowercase() == "nand" {
         return Ok(HashMap::new());

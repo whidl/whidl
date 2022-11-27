@@ -1,4 +1,4 @@
-use crate::error::{N2VError, ErrorKind};
+use crate::error::{ErrorKind, N2VError};
 use crate::test_scanner::{TestScanner, Token, TokenType};
 use std::path::PathBuf;
 

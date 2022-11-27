@@ -23,7 +23,7 @@ pub struct N2VError {
 
 impl std::fmt::Debug for N2VError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.msg)
+        write!(f, "{}", self)
     }
 }
 
