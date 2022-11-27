@@ -506,7 +506,7 @@ impl Chip {
                                 self.hdl_provider.clone(),
                                 m.wire_ident.clone(),
                             ),
-                            msg: String::from("Duplicate signal source."),
+                            msg: format!("Duplicate source for signal name {}.", signal_name),
                         }));
                     }
 
