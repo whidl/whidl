@@ -498,6 +498,18 @@ impl Chip {
                 let mut i = port_range.start;
                 let mut j = wire_range.start;
                 while i < port_range.end {
+                    // Check here to see if a bit already has a source.
+                    // If it does we have an error in the HDL.
+                    if signal_sources.get(signal_name).unwrap()[j].is_some() {
+                        return Err(Box::new(N2VError {
+                            kind: ErrorKind::ParseIdentError(
+                                self.hdl_provider.clone(),
+                                m.wire_ident.clone(),
+                            ),
+                            msg: String::from("Duplicate signal source."),
+                        }));
+                    }
+
                     signal_sources.get_mut(signal_name).unwrap()[j] = Some((
                         part_node,
                         Bus {
