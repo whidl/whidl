@@ -34,13 +34,16 @@ impl std::fmt::Display for ChipHDL {
 }
 
 impl ChipHDL {
-    pub fn get_port(&self, name: &str) -> &GenericPort {
-        let port_idx = self
-            .ports
-            .iter()
-            .position(|x| x.name.value == name)
-            .unwrap();
-        &self.ports[port_idx]
+    pub fn get_port(&self, name: &str) -> Result<&GenericPort, Box<dyn Error>> {
+        let port_idx = self.ports.iter().position(|x| x.name.value == name);
+
+        match port_idx {
+            Some(idx) => Ok(&self.ports[idx]),
+            None => Err(Box::new(N2VError {
+                msg: format!("Attempt to get non-existent port {}", name),
+                kind: ErrorKind::Other,
+            })),
+        }
     }
 }
 

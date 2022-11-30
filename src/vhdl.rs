@@ -351,8 +351,8 @@ fn port_mapping(
     hdl: &ChipHDL,
     mapping: &PortMapping,
     inferred_widths: &HashMap<String, GenericWidth>,
-) -> (String, String, String, String) {
-    let port_width = &hdl.get_port(&mapping.port.name).width;
+) -> Result<(String, String, String, String), Box<dyn Error>> {
+    let port_width = &hdl.get_port(&mapping.port.name)?.width;
     let vhdl_port_name = keyw(&mapping.port.name);
 
     let port_range = match &mapping.port.start {
@@ -423,7 +423,7 @@ fn port_mapping(
         keyw(&mapping.wire.name)
     };
 
-    (vhdl_port_name, port_range, wire_name, wire_range)
+    Ok((vhdl_port_name, port_range, wire_name, wire_range))
 }
 
 // VHDL keywords that we can't use.
@@ -468,10 +468,9 @@ pub fn synth_vhdl(
         &mut top_level_vhdl,
         "architecture arch of {} is",
         keyw(&hdl.name)
-    )
-    .unwrap();
+    )?;
 
-    writeln!(&mut top_level_vhdl).unwrap();
+    writeln!(&mut top_level_vhdl)?;
 
     // Declare components
     let mut component_decls: HashSet<String> = HashSet::new();
@@ -500,7 +499,7 @@ pub fn synth_vhdl(
                     // Only output one declaration even if the component is used multiple times.
                     let generated_declaration = generate_component_declaration(c, provider);
                     if !component_decls.contains(&generated_declaration) {
-                        write!(&mut top_level_vhdl, "{}", &generated_declaration).unwrap();
+                        write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
                         component_decls.insert(generated_declaration);
                     }
                 }
@@ -539,7 +538,7 @@ pub fn synth_vhdl(
     for (component_counter, part) in hdl.parts.iter().enumerate() {
         match part {
             Part::Component(c) => {
-                let component_hdl = get_hdl(&c.name.value, provider).unwrap();
+                let component_hdl = get_hdl(&c.name.value, provider)?;
                 let component_id = format!("nand2v_c{}", component_counter);
 
                 // Parameters assigned to generic variables.
@@ -559,8 +558,7 @@ pub fn synth_vhdl(
                         &mut generic_map,
                         "generic map({})\n\t",
                         vhdl_generic_params.join(",")
-                    )
-                    .unwrap();
+                    )?;
                 }
 
                 let mut port_map: Vec<String> = Vec::new();
@@ -577,9 +575,9 @@ pub fn synth_vhdl(
                         signals.insert(sig);
                     }
 
-                    let port_direction = &component_hdl.get_port(&mapping.port.name).direction;
+                    let port_direction = &component_hdl.get_port(&mapping.port.name)?.direction;
                     let (vhdl_port_name, port_range, wire_name, wire_range) =
-                        port_mapping(&component_hdl, mapping, &inferred_widths);
+                        port_mapping(&component_hdl, mapping, &inferred_widths)?;
 
                     if port_direction == &PortDirection::In {
                         port_map.push(format!(
@@ -599,8 +597,7 @@ pub fn synth_vhdl(
                             &mut arch_vhdl,
                             "{}{} <= {}{};",
                             wire_name, wire_range, redirect_signal, wire_range
-                        )
-                        .unwrap();
+                        )?;
 
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
                         let sig = print_signal(
@@ -668,9 +665,9 @@ pub fn synth_vhdl(
                             }
 
                             let port_direction =
-                                &component_hdl.get_port(&mapping.port.name).direction;
+                                &component_hdl.get_port(&mapping.port.name)?.direction;
                             let (vhdl_port_name, port_range, wire_name, wire_range) =
-                                port_mapping(&component_hdl, mapping, &inferred_widths);
+                                port_mapping(&component_hdl, mapping, &inferred_widths)?;
 
                             if port_direction == &PortDirection::In {
                                 port_map.push(format!(
@@ -719,9 +716,9 @@ pub fn synth_vhdl(
                         )
                         .unwrap();
 
-                        body_vhdl
+                        Ok(body_vhdl)
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
                 writeln!(
                     &mut arch_vhdl,
                     "n2vlp{} : for {} in {} to {} generate\n{} end generate n2vlp{};",
@@ -731,8 +728,7 @@ pub fn synth_vhdl(
                     lp.end,
                     body.join("\n"),
                     component_counter
-                )
-                .unwrap();
+                )?;
             }
         }
     }

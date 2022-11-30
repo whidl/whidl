@@ -447,7 +447,20 @@ impl Chip {
 
             for m in &part.mappings {
                 let signal_name = &m.wire.name;
-                let port = part_hdl.get_port(&m.port.name);
+                let port = match part_hdl.get_port(&m.port.name) {
+                    Ok(x) => x,
+                    Err(_) => {
+                        let err_more_info = N2VError {
+                            kind: ErrorKind::ParseIdentError(
+                                self.hdl_provider.clone(),
+                                m.wire_ident.clone(),
+                            ),
+                            msg: format!("Attempt to get non-existent port {}.", &m.port.name),
+                        };
+
+                        return Err(Box::new(err_more_info));
+                    }
+                };
                 if signal_name == "true" {
                     need_true_literal = true;
                 }

@@ -1,6 +1,6 @@
 {
   "name": "@whidl/whidl",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "files": [
     "whidl_bg.wasm",
     "whidl.js",
