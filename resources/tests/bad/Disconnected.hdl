@@ -1,0 +1,8 @@
+CHIP Disconnected {
+    IN a, b;
+    OUT out;
+
+    PARTS:
+    // Missing input for b
+    And(a=a, out=out);
+}

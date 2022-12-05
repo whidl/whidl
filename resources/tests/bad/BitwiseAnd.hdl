@@ -1,0 +1,9 @@
+CHIP BitwiseAnd<W> {
+    IN a[W], b[W];
+    OUT out[W];
+
+    FOR i in 0 to W-1 {
+        And(a=a[i], b=b[i], out=out[i]);
+    } 
+}
+

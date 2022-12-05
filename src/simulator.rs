@@ -442,6 +442,12 @@ impl Chip {
                 &resolved_generics,
             )?;
             let part_variables = part_chip.variables.clone();
+
+            let mut used_port_buses: BusMap = BusMap::new();
+            for (port_name, port) in &part_chip.ports {
+                used_port_buses.create_bus(port_name, port.width)?;
+            }
+
             let part_node = self.circuit.add_node(part_chip);
             created_components.push(part_node);
 
@@ -468,10 +474,6 @@ impl Chip {
                     need_false_literal = true;
                 }
 
-                if port.direction == PortDirection::In {
-                    continue;
-                }
-
                 let port_width = eval_expr_numeric(&port.width, &part_variables)?;
                 let port_start = match &m.port.start {
                     None => 0,
@@ -486,6 +488,18 @@ impl Chip {
                     start: port_start,
                     end: port_end + 1,
                 };
+
+                // Insert port range for the pupose of verifying that we have
+                // inputs for all of the input pins. Skip the rest of the loop.
+                if port.direction == PortDirection::In {
+                    let used_bus = Bus {
+                        name: m.port.name.clone(),
+                        range: Some(port_range.clone()),
+                    };
+                    used_port_buses.insert_option(&used_bus, vec![Some(true); port_range.len()]);
+
+                    continue;
+                }
 
                 let wire_start = match &m.wire.start {
                     None => 0,
@@ -532,6 +546,31 @@ impl Chip {
                     ));
                     i += 1;
                     j += 1;
+                }
+            }
+
+            // Make sure we have inputs for every port bit.
+            // for each port in the used busmap
+            // if any bit is None, then warn.
+            for port in part_hdl.ports {
+                if port.direction == PortDirection::Out {
+                    continue;
+                }
+
+                let used_bits = used_port_buses.get_name(&port.name.value);
+                for b in used_bits {
+                    if b.is_none() {
+                        return Err(Box::new(N2VError {
+                            kind: ErrorKind::ParseIdentError(
+                                self.hdl_provider.clone(),
+                                part.name.clone(),
+                            ),
+                            msg: format!(
+                                "Component does not provide inputs for all bits of {}.",
+                                &port.name.value
+                            ),
+                        }));
+                    }
                 }
             }
         }
@@ -1199,7 +1238,24 @@ fn make_dff_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip 
 
     Chip {
         name: String::from("DFF"),
-        ports: HashMap::new(),
+        ports: HashMap::from([
+            (
+                String::from("in"),
+                Port {
+                    direction: PortDirection::In,
+                    name: Identifier::from("in"),
+                    width: 1,
+                },
+            ),
+            (
+                String::from("out"),
+                Port {
+                    direction: PortDirection::Out,
+                    name: Identifier::from("out"),
+                    width: 1,
+                },
+            ),
+        ]),
         signals,
         hdl: None,
         elaborated: false,
@@ -2117,5 +2173,28 @@ mod test {
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_ok());
+    }
+
+    // Tests that component instantiations provide inputs for all bits of component input ports.
+    #[test]
+    fn test_disconnected_component_inputs() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let base_path = String::from(
+            manifest_dir
+                .join("resources")
+                .join("tests")
+                .join("bad")
+                .to_str()
+                .unwrap(),
+        );
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+        let contents = provider.get_hdl("Disconnected.hdl").unwrap();
+        let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
+        let mut parser = Parser {
+            scanner: &mut scanner,
+        };
+        let hdl = parser.parse().expect("Parse error");
+        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
+        assert!(chip.is_err());
     }
 }
