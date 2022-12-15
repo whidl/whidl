@@ -17,7 +17,6 @@ pub enum Part {
 }
 
 /// The Parse Tree for an HDL Chip.
-///
 #[derive(Clone)]
 pub struct ChipHDL {
     pub name: String,
@@ -191,8 +190,28 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             path: None,
             generic_decls: Vec::new(),
         });
-    } else if name.to_lowercase() == "dff" {
-        // Hard-coded NAND chip
+    } else if name.to_lowercase() == "buffer" {
+        return Ok(ChipHDL {
+            name: String::from("BUFFER"),
+            ports: vec![
+                GenericPort {
+                    name: Identifier::from("in"),
+                    width: GenericWidth::Terminal(Terminal::Num(1)), // default value that will update later
+                    direction: PortDirection::In,
+                },
+                GenericPort {
+                    name: Identifier::from("out"),
+                    width: GenericWidth::Terminal(Terminal::Num(1)),
+                    direction: PortDirection::Out,
+                },
+            ],
+            parts: Vec::new(),
+            path: None,
+            generic_decls: Vec::new(),
+        });
+    }
+    else if name.to_lowercase() == "dff" {
+        // Hard-coded DFF chip
         return Ok(ChipHDL {
             name: String::from("DFF"),
             ports: vec![
@@ -297,10 +316,11 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn generics(&mut self) -> Result<Vec<GenericWidth>, Box<dyn Error>> {
         let mut res: Vec<GenericWidth> = Vec::new();
 
-        if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {
+        if self.scanner.peek().unwrap().token_type != TokenType::Number &&
+            self.scanner.peek().unwrap().token_type != TokenType::Identifier {
             return Ok(Vec::new());
         }
-        self.consume(TokenType::LeftAngle)?;
+        //self.consume(TokenType::LeftAngle)?;
 
         loop {
             let next = self.scanner.next();
@@ -486,7 +506,6 @@ impl<'a, 'b> Parser<'a, 'b> {
     // Parses a list of components (parts). This list may contain for-generate loops.
     fn parts(&mut self) -> Result<Vec<Part>, Box<dyn Error>> {
         let mut parts: Vec<Part> = Vec::new();
-
         loop {
             let peeked = self.scanner.peek();
             match &peeked {
@@ -640,12 +659,75 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(width)
     }
 
+    /// Extracts a component from HDL
     fn component(&mut self) -> Result<Component, Box<dyn Error>> {
-        Ok(Component {
-            name: Identifier::from(self.scanner.next().unwrap()),
+        let ident = Identifier::from(self.scanner.next().unwrap());
+
+        // TODO: loop this section and check for range expressions [i..j]
+        let peeked = self.scanner.peek()
+                         .expect("Expected an angle bracket or paren after an identifier.");
+         if let Token {
+                token_type: TokenType::LeftAngle,
+                ..
+            } = peeked {
+            // Have to perform manual port mappings for now
+            // Seperate the buffer mappings into a seperate function?
+             self.consume(TokenType::LeftAngle)?;
+
+             let peeked1 = self.scanner.peek()
+                               .expect("Expected and equals sign or a generic declaration");
+             if let Token {
+                 token_type: TokenType::Equal,
+                 ..
+             } = peeked1 {
+                 self.consume(TokenType::Equal)?;
+                 let wire_ident = self.scanner.peek();
+                 self.consume(TokenType::Identifier)?;
+
+                 let mut port_mappings = Vec::<PortMapping>::new();
+                 port_mappings.push(PortMapping {
+                     wire_ident: ident.clone(),
+                     wire: BusHDL {
+                         name: ident.value.clone(),
+                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                     },
+                     port: BusHDL {
+                         name: String::from("out"),
+                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                     },
+                 });
+                 port_mappings.push(PortMapping {
+                     wire_ident: ident,
+                     wire: BusHDL {
+                         name: wire_ident.unwrap().lexeme,
+                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                     },
+                     port: BusHDL {
+                         name: String::from("in"),
+                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
+                     },
+                 });
+                 self.consume(TokenType::Semicolon)?;
+
+
+                 return Ok(Component {
+                     name: Identifier::from("buffer"),
+                     generic_params: Vec::new(), // no generic params for the buff chip
+                     mappings: port_mappings,
+                 });
+             }
+         }
+
+        return Ok(Component {
+            name: ident,
             generic_params: self.generics()?,
             mappings: self.port_mappings()?,
-        })
+        });
+
     }
 
     fn port_width(&mut self) -> Result<GenericWidth, Box<dyn Error>> {
@@ -856,6 +938,18 @@ mod test {
         parser.parse().expect("Parse error");
     }
 
+	#[test]
+	fn test_buffer() {
+        let path = PathBuf::from("buffer/Buffer.hdl");
+        let contents = read_hdl(&path);
+        let mut scanner = Scanner::new(contents.as_str(), path);
+        let mut parser = Parser {
+            scanner: &mut scanner,
+        };
+        parser.parse().expect("Parse error");
+    }
+
+
     #[test]
     fn test_arm_muxgen() {
         let path = PathBuf::from("arm/MuxGen.hdl");
@@ -866,4 +960,5 @@ mod test {
         };
         parser.parse().expect("Parse error");
     }
+
 }

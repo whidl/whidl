@@ -1,3 +1,4 @@
+use std::arch::x86_64::_mm_floor_ps;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -194,6 +195,8 @@ impl Chip {
 
         if hdl.name.to_uppercase() == "NAND" {
             return Ok(make_nand_chip(parent, hdl_provider));
+        } else if hdl.name.to_uppercase() == "BUFFER" {
+            return Ok(make_buffer_chip(parent, hdl_provider));
         } else if hdl.name.to_uppercase() == "DFF" {
             return Ok(make_dff_chip(parent, hdl_provider));
         }
@@ -474,6 +477,7 @@ impl Chip {
                     need_false_literal = true;
                 }
 
+                // Unable to use the default widths for the Buffer chip here
                 let port_width = eval_expr_numeric(&port.width, &part_variables)?;
                 let port_start = match &m.port.start {
                     None => 0,
@@ -1216,6 +1220,48 @@ fn make_port_chip(
     }
 }
 
+fn make_buffer_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip {
+    let circuit = Circuit::new();
+    //let ports = HashMap::new();
+    let mut signals = BusMap::new();
+    signals.create_bus("in", 1).unwrap();
+    signals.create_bus("out", 1).unwrap();
+
+    Chip {
+        name: String::from("BUFFER"),
+        ports: HashMap::from([
+            (
+                String::from("in"),
+                Port {
+                    direction: PortDirection::In,
+                    name: Identifier::from("in"),
+                    width: 1,
+                },
+            ),
+            (
+                String::from("out"),
+                Port {
+                    direction: PortDirection::Out,
+                    name: Identifier::from("out"),
+                    width: 1,
+                },
+            ),
+        ]),
+        signals,
+        hdl: None,
+        elaborated: true,
+        circuit,
+        dirty: false,
+        input_port_nodes: Vec::new(),
+        output_port_nodes: Vec::new(),
+        cache: false,
+        parent,
+        hdl_provider: Rc::clone(hdl_provider),
+        variables: HashMap::new(),
+        components: Vec::new(),
+    }
+}
+
 fn make_dff_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip {
     let circuit = Circuit::new();
     let mut signals = BusMap::new();
@@ -1309,11 +1355,20 @@ pub fn infer_widths(
     }
 
     let mut inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
+    let mut last_inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
 
     // Go through twice to make sure that all of the inferred widths work
     // with every mapping.
-    for _ in 0..2 {
+    let mut buffers = Vec::new();
+    loop {
+        last_inferred_widths = inferred_widths.clone();
         for part in components {
+            // Skip any buffer chips. They will be evaluated after everything else
+            if part.name.value.clone() == String::from("buffer") {
+                buffers.push(part);
+                continue;
+            }
+
             let component_hdl = get_hdl(&part.name.value, provider)?;
             // Convert generics with vars to concrete generics for component.
             // e.g. Mux<W> needs to become Mux<4> if W=4. At this point
@@ -1359,40 +1414,47 @@ pub fn infer_widths(
                     })?;
                 let port = &component_hdl.ports[port_idx];
 
+                // I need to make the port_width from the component match the wire
                 // Get the width of the port referred to in the mapping.
                 // This uses the component chip variables because the width of the port is defined inside the component
-                let port_width = eval_expr(&port.width, &component_variables);
+                let hdl_port_width = eval_expr(&port.width, &component_variables);
 
                 let wire_start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
                 let wire_end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
 
                 // Convert inclusive range in HDL to exclusive Range in Rust
-                let wire_range: Option<Range<GenericWidth>> = wire_start.map(|ws| Range {
+                let mp_wire_range: Option<Range<GenericWidth>> = wire_start.map(|ws| Range {
                     start: ws,
                     end: wire_end.unwrap() + GenericWidth::Terminal(Terminal::Num(1)),
                 });
                 let port_start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
                 let port_end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
                 // Convert inclusive range in HDL to exclusive Range in Rust
-                let port_range: Option<Range<GenericWidth>> = port_start.map(|ps| Range {
+                let mp_port_range: Option<Range<GenericWidth>> = port_start.map(|ps| Range {
                     start: ps,
                     end: port_end.unwrap() + GenericWidth::Terminal(Terminal::Num(1)),
                 });
 
-                match (&wire_range, &port_range, inferred_widths.get(&m.wire.name)) {
-                    // wire range none, port range none, width none => use port width
+                // To line up widths, use the extracted, port range, wire range from the mapping, and any width previously found
+                match (
+                    &mp_wire_range,
+                    &mp_port_range,
+                    inferred_widths.get(&m.wire.name),
+                ) {
+                    // wire range none, mapping port range none, previous inferred width none => use port width from component ports
                     (None, None, None) => {
-                        inferred_widths.insert(m.wire.name.clone(), port_width);
+                        inferred_widths.insert(m.wire.name.clone(), hdl_port_width);
                     }
 
                     // wire range none, port range none, width some => verify width = port width
                     (None, None, Some(w)) => {
-                        if w.is_numeric() && w != &port_width {
-                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
-                                &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &port_width
+                        if w.is_numeric() && w != &hdl_port_width {
+                            return Err(Box::new(N2VError { msg: format!(
+                                "Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.",
+                                &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &hdl_port_width
                             ),
-                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        }));
+                                                           kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
+                            }));
                         }
                     }
 
@@ -1416,10 +1478,10 @@ pub fn infer_widths(
                     (Some(wr), None, None) => {
                         if wr.end.is_numeric()
                             && wr.start.is_numeric()
-                            && (&wr.end - &wr.start) != port_width
+                            && (&wr.end - &wr.start) != hdl_port_width
                         {
                             return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
-                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, port_width
+                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, hdl_port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         }));
@@ -1431,10 +1493,10 @@ pub fn infer_widths(
                     (Some(wr), None, Some(w)) => {
                         if wr.end.is_numeric()
                             && wr.start.is_numeric()
-                            && (&wr.end - &wr.start) != port_width
+                            && (&wr.end - &wr.start) != hdl_port_width
                         {
                             return Err(Box::new(N2VError { msg: format!("Chip `{}` component `{}` wire range of signal `{}` is {}, not equal port `{}` width, which is {}.",
-                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
+                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &hdl_port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         }));
@@ -1496,6 +1558,47 @@ pub fn infer_widths(
                 }
             }
         }
+        if inferred_widths == last_inferred_widths {
+            // Finally evaluate buffer widths
+            // NOTE: Not really a fan of how this is done. There will only be two wires in a buffer, so maybe a tuple would be better?
+            for part in buffers {
+                let mut wire_widths = Vec::new();
+                // Update the wires in the port mappings (see if they exist and make sure they match)
+                for m in &part.mappings {
+                    let wire_width = inferred_widths.get(&m.wire.name.clone());
+                    wire_widths.push(wire_width);
+                }
+
+                match (wire_widths[0], wire_widths[1]) {
+                    (Some(w), None) => {
+                        inferred_widths.insert(part.mappings[1].wire.name.clone(), w.clone());
+                    }
+                    (None, Some(w)) => {
+                        inferred_widths.insert(part.mappings[0].wire.name.clone(), w.clone());
+                    }
+                    (Some(w1), Some(w2)) => {
+                        if w1 != w2 {
+                            let wire_name = &part.mappings[0].wire.name.clone();
+                            return Err(Box::new(N2VError {
+                                msg: format!(
+                                    "Signal widths of {} and {} are not equal for part {}",
+                                    &part.mappings[0].wire.name.clone(),
+                                    &part.mappings[1].wire.name.clone(),
+                                    &part.name.value
+                                ),
+                                //line: m.wire_ident.line,
+                                kind: ErrorKind::ParseIdentError(
+                                    provider.clone(),
+                                    Identifier::from(&wire_name[..]),
+                                ),
+                            }));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            break;
+        }
     }
 
     Ok(inferred_widths)
@@ -1547,6 +1650,14 @@ mod test {
         let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer() {
+        let mut simulator = make_simulator("../../buffer/Buffer.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
     }
 
     #[test]
