@@ -1586,7 +1586,6 @@ pub fn infer_widths(
                                     &part.mappings[1].wire.name.clone(),
                                     &part.name.value
                                 ),
-                                //line: m.wire_ident.line,
                                 kind: ErrorKind::ParseIdentError(
                                     provider.clone(),
                                     Identifier::from(&wire_name[..]),
@@ -1594,7 +1593,7 @@ pub fn infer_widths(
                             }));
                         }
                     }
-                    _ => {}
+                    (None, None) => {} // Neither of the wires exist; just ignore them?
                 }
             }
             break;
