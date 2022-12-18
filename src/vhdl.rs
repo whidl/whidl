@@ -202,7 +202,7 @@ pub fn create_quartus_project(
     writeln!(
         tcl,
         "set_global_assignment -name TOP_LEVEL_ENTITY {}",
-        keyw(&chip.name)
+        keyw(&chip.name, &HashMap::new())
     )?;
 
     // write out each vhdl file
@@ -280,7 +280,11 @@ fn generics(chip: &ChipHDL) -> Result<String, Box<dyn Error>> {
     let mut generics = Vec::new();
     for g in &chip.generic_decls {
         let mut generic_vhdl = String::new();
-        write!(&mut generic_vhdl, "{} : positive", keyw(&g.value))?;
+        write!(
+            &mut generic_vhdl,
+            "{} : positive",
+            keyw(&g.value, &HashMap::new())
+        )?;
         generics.push(generic_vhdl);
     }
 
@@ -297,7 +301,11 @@ fn ports(chip: &ChipHDL) -> Result<String, Box<dyn Error>> {
     let mut ports = Vec::new();
     for port in &chip.ports {
         let mut port_vhdl = String::new();
-        write!(&mut port_vhdl, "{} : ", keyw(&port.name.value))?;
+        write!(
+            &mut port_vhdl,
+            "{} : ",
+            keyw(&port.name.value, &HashMap::new())
+        )?;
         if port.direction == PortDirection::In {
             write!(&mut port_vhdl, "in ")?;
         } else {
@@ -346,9 +354,10 @@ fn port_mapping(
     hdl: &ChipHDL,
     mapping: &PortMapping,
     inferred_widths: &HashMap<String, GenericWidth>,
+    manglings: &HashMap<String, String>,
 ) -> Result<(String, String, String, String), Box<dyn Error>> {
     let port_width = &hdl.get_port(&mapping.port.name)?.width;
-    let vhdl_port_name = keyw(&mapping.port.name);
+    let vhdl_port_name = keyw(&mapping.port.name, manglings);
 
     let port_range = match &mapping.port.start {
         None => {
@@ -415,14 +424,15 @@ fn port_mapping(
             String::from("(others => '1')")
         }
     } else {
-        keyw(&mapping.wire.name)
+        keyw(&mapping.wire.name, manglings)
     };
 
     Ok((vhdl_port_name, port_range, wire_name, wire_range))
 }
 
 // VHDL keywords that we can't use.
-fn keyw(name: &str) -> String {
+// Also handles name manglings from name conflicts.
+fn keyw(name: &str, manglings: &HashMap<String, String>) -> String {
     match name.to_lowercase().as_str() {
         "abs" => String::from("abs_n2v"),
         "access" => String::from("access_n2v"),
@@ -520,7 +530,13 @@ fn keyw(name: &str) -> String {
         "with" => String::from("with_n2v"),
         "xnor" => String::from("xnor_n2v"),
         "xor" => String::from("xor_n2v"),
-        _ => String::from(name),
+        _ => {
+            if manglings.contains_key(&name.to_lowercase()) {
+                manglings.get(&name.to_lowercase()).unwrap().to_string()
+            } else {
+                String::from(name)
+            }
+        }
     }
 }
 
@@ -537,6 +553,9 @@ pub fn synth_vhdl(
     // top-level generics. We aren't simulating the chip, we are translating
     // the HDL to VHDL.
 
+    let hdl = &mut hdl.clone();
+    let manglings = &fix_top_level_naming_conflicts(hdl);
+
     // Component name -> component definition
     let mut entities = HashMap::new();
 
@@ -548,7 +567,7 @@ pub fn synth_vhdl(
     writeln!(
         &mut top_level_vhdl,
         "architecture arch of {} is",
-        keyw(&hdl.name)
+        keyw(&hdl.name, &HashMap::new())
     )?;
 
     writeln!(&mut top_level_vhdl)?;
@@ -593,13 +612,17 @@ pub fn synth_vhdl(
 
     let components = generate_components(hdl)?;
     let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
-    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
+    let port_names: HashSet<String> = hdl
+        .ports
+        .iter()
+        .map(|x| keyw(&x.name.value, &HashMap::new()))
+        .collect();
 
     let print_signal =
         |wire_name: &String, wire_width: &GenericWidth| -> Result<String, Box<dyn Error>> {
             let mut new_signal: String = String::new();
-            if !port_names.contains(&keyw(wire_name)) {
-                write!(&mut new_signal, "signal {} ", keyw(wire_name))?;
+            if !port_names.contains(&keyw(wire_name, manglings)) {
+                write!(&mut new_signal, "signal {} ", keyw(wire_name, manglings))?;
                 if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
                     write!(&mut new_signal, ": std_logic;")?;
                 } else {
@@ -658,7 +681,7 @@ pub fn synth_vhdl(
 
                     let port_direction = &component_hdl.get_port(&mapping.port.name)?.direction;
                     let (vhdl_port_name, port_range, wire_name, wire_range) =
-                        port_mapping(&component_hdl, mapping, &inferred_widths)?;
+                        port_mapping(&component_hdl, mapping, &inferred_widths, manglings)?;
 
                     if port_direction == &PortDirection::In {
                         port_map.push(format!(
@@ -693,7 +716,7 @@ pub fn synth_vhdl(
                     &mut arch_vhdl,
                     "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
                     component_id,
-                    keyw(&c.name.value),
+                    keyw(&c.name.value, manglings),
                     generic_map,
                     port_map.join(", ")
                 )?
@@ -746,7 +769,7 @@ pub fn synth_vhdl(
                             let port_direction =
                                 &component_hdl.get_port(&mapping.port.name)?.direction;
                             let (vhdl_port_name, port_range, wire_name, wire_range) =
-                                port_mapping(&component_hdl, mapping, &inferred_widths)?;
+                                port_mapping(&component_hdl, mapping, &inferred_widths, manglings)?;
 
                             if port_direction == &PortDirection::In {
                                 port_map.push(format!(
@@ -788,7 +811,7 @@ pub fn synth_vhdl(
                             &mut body_vhdl,
                             "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
                             component_id,
-                            keyw(&c.name.value),
+                            keyw(&c.name.value, manglings),
                             generic_map,
                             port_map.join(", ")
                         )?;
@@ -831,16 +854,73 @@ pub fn synth_vhdl(
     Ok(entities)
 }
 
+/// VHDL uses a single declarative region for port names, generic name, and components.
+/// HDL allows components to use the same names as ports, generics.
+/// Therefore we must mangle ports and generics if they conflict with component names.
+///
+/// Returns a map of name manglings applied to ports and generics.
+fn fix_top_level_naming_conflicts(hdl: &mut ChipHDL) -> HashMap<String, String> {
+    let mut manglings: HashMap<String, String> = HashMap::new();
+
+    // Collect all of the component names into component_names
+    fn insert_component_names(l: &mut HashSet<String>, p: &Part) {
+        match p {
+            Part::Component(c) => {
+                l.insert(c.name.value.to_lowercase());
+            }
+            Part::Loop(lp) => lp
+                .body
+                .iter()
+                .for_each(|c| insert_component_names(l, &Part::Component(c.clone()))),
+        }
+    }
+    let mut component_names: HashSet<String> = HashSet::new();
+    for p in &hdl.parts {
+        insert_component_names(&mut component_names, &p);
+    }
+
+    // loop over every port
+    // if port name conflicts with component, mangle port name
+    for port in &mut hdl.ports {
+        if component_names.contains(&port.name.value.to_lowercase()) {
+            let mangled_name = String::from(&port.name.value) + "_port";
+            manglings.insert(port.name.value.clone(), mangled_name.clone());
+            port.name.value = mangled_name;
+        }
+    }
+
+    // loop over every generic decl
+    // if generic name conflicts with component, mangle generic name
+    for generic in &mut hdl.generic_decls {
+        if component_names.contains(&generic.value.to_lowercase()) {
+            let mangled_name = String::from(&generic.value) + "_gen";
+            manglings.insert(generic.value.clone(), mangled_name.clone());
+            generic.value = mangled_name;
+        }
+    }
+
+    manglings
+}
+
 fn write_top_level_entity(
     hdl: &ChipHDL,
     top_level_vhdl: &mut String,
 ) -> Result<(), Box<dyn Error>> {
-    writeln!(top_level_vhdl, "entity {} is", keyw(&hdl.name))?;
+    writeln!(
+        top_level_vhdl,
+        "entity {} is",
+        keyw(&hdl.name, &HashMap::new())
+    )?;
+
     if !hdl.generic_decls.is_empty() {
         writeln!(top_level_vhdl, "{}", generics(hdl)?)?;
     }
     writeln!(top_level_vhdl, "{}", ports(hdl)?)?;
-    writeln!(top_level_vhdl, "end entity {};", keyw(&hdl.name))?;
+    writeln!(
+        top_level_vhdl,
+        "end entity {};",
+        keyw(&hdl.name, &HashMap::new())
+    )?;
     writeln!(top_level_vhdl)?;
 
     Ok(())
@@ -876,7 +956,7 @@ fn generate_component_declaration(
     writeln!(
         &mut component_decl,
         "component {}",
-        keyw(&component_hdl.name)
+        keyw(&component_hdl.name, &HashMap::new())
     )?;
     write!(&mut component_decl, "{}", generics(&component_hdl)?)?;
     write!(&mut component_decl, "{}", ports(&component_hdl)?)?;
