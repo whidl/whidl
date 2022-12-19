@@ -14,6 +14,7 @@ use std::rc::Rc;
 pub enum Part {
     Component(Component),
     Loop(Loop),
+    Assignment(Assignment),
 }
 
 /// The Parse Tree for an HDL Chip.
@@ -144,6 +145,13 @@ pub struct Loop {
     pub end: GenericWidth,
     pub iterator: Identifier,
     pub body: Vec<Component>, // Prevent nested loops.
+}
+
+#[derive(Clone)]
+/// Designates two wire names. The signal from the right wire will be assigned to the left.
+pub struct Assignment { 
+    pub left: BusHDL,
+    pub right: BusHDL,
 }
 
 #[derive(Serialize, Clone, PartialEq, Eq, Hash, Debug)]
@@ -513,7 +521,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     token_type: TokenType::Identifier,
                     ..
                 }) => {
-                    parts.push(Part::Component(self.component()?));
+                    parts.push(self.component()?);
                 }
                 Some(Token {
                     token_type: TokenType::For,
@@ -565,7 +573,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                     token_type: TokenType::Identifier,
                     ..
                 }) => {
-                    parts.push(self.component()?);
+                    // Destructure the Part recieved from component
+                    if let Part::Component(comp) = self.component()? {
+                        parts.push(comp);
+                    }
                 }
                 Some(Token {
                     token_type: TokenType::RightCurly,
@@ -660,11 +671,13 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     /// Extracts a component from HDL
-    fn component(&mut self) -> Result<Component, Box<dyn Error>> {
-        let ident = Identifier::from(self.scanner.next().unwrap());
+    fn component(&mut self) -> Result<Part, Box<dyn Error>> {
+        // Turn this
+        let ident = self.scanner.next().unwrap();
 
         // TODO: loop this section and check for range expressions [i..j]
-        let peeked = self.scanner.peek()
+        let peeked = self.scanner
+                         .peek()
                          .expect("Expected an angle bracket or paren after an identifier.");
          if let Token {
                 token_type: TokenType::LeftAngle,
@@ -674,59 +687,40 @@ impl<'a, 'b> Parser<'a, 'b> {
             // Seperate the buffer mappings into a seperate function?
              self.consume(TokenType::LeftAngle)?;
 
-             let peeked1 = self.scanner.peek()
+             let peeked1 = self.scanner
+                               .peek()
                                .expect("Expected and equals sign or a generic declaration");
              if let Token {
                  token_type: TokenType::Equal,
                  ..
              } = peeked1 {
                  self.consume(TokenType::Equal)?;
-                 let wire_ident = self.scanner.peek();
+                 let wire_ident = self.scanner.peek().unwrap();
                  self.consume(TokenType::Identifier)?;
+                 // wire_ident if the rhs, ident is the left-hand side
+                 let assign = Assignment {
+                     left: BusHDL {
+                         name: ident.lexeme.clone(),
+                         start: None,
+                         end: None,
+                     },
+                     right: BusHDL {
+                         name: wire_ident.lexeme.clone(),
+                         start: None,
+                         end: None,
+                     }
+                 };
 
-                 let mut port_mappings = Vec::<PortMapping>::new();
-                 port_mappings.push(PortMapping {
-                     wire_ident: ident.clone(),
-                     wire: BusHDL {
-                         name: ident.value.clone(),
-                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                     },
-                     port: BusHDL {
-                         name: String::from("out"),
-                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                     },
-                 });
-                 port_mappings.push(PortMapping {
-                     wire_ident: ident,
-                     wire: BusHDL {
-                         name: wire_ident.unwrap().lexeme,
-                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                     },
-                     port: BusHDL {
-                         name: String::from("in"),
-                         start: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                         end: Some(GenericWidth::Terminal(Terminal::Num(0))),
-                     },
-                 });
                  self.consume(TokenType::Semicolon)?;
-
-
-                 return Ok(Component {
-                     name: Identifier::from("buffer"),
-                     generic_params: Vec::new(), // no generic params for the buff chip
-                     mappings: port_mappings,
-                 });
+                 return Ok(Part::Assignment(assign));
              }
          }
 
-        return Ok(Component {
-            name: ident,
+        return Ok(Part::Component(Component {
+            name: Identifier::from(ident),
             generic_params: self.generics()?,
             mappings: self.port_mappings()?,
-        });
+        }));
 
     }
 

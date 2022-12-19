@@ -504,6 +504,7 @@ pub fn synth_vhdl(
                     }
                 }
             }
+            Part::Assignment(a) => {}
         }
     }
 
@@ -511,7 +512,10 @@ pub fn synth_vhdl(
     let mut arch_vhdl: String = String::new();
 
     let components = generate_components(hdl)?;
-    let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
+
+    // NOTE: Modify this later to consider assignments
+    let placeholder_assignments = Vec::new();
+    let inferred_widths = infer_widths(hdl, &placeholder_assignments, &components, provider, &Vec::new())?;
     let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
 
     let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
@@ -730,6 +734,7 @@ pub fn synth_vhdl(
                     component_counter
                 )?;
             }
+            Part::Assignment(a) => {}
         }
     }
 
@@ -835,6 +840,7 @@ fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
                     }
                 }
             }
+            Part::Assignment(a) => {}
         }
     }
 
