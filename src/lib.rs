@@ -1,9 +1,13 @@
+// These modules have functions that are only used by main.rs. It is useless
+// to warn about dead code here.
+#![allow(dead_code)]
+
 mod busmap;
 mod error;
 mod expr;
-pub mod parser; // hack to deal with dead code warning
 mod scanner;
-pub mod simulator;
+mod simulator;
+mod parser;
 mod test_scanner;
 
 use crate::busmap::BusMap;
