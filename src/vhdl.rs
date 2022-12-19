@@ -1,5 +1,5 @@
-// This module is responsible for taking a parsed Chip as input and
-// producing equivalent VHDL code.
+//! This module is responsible for taking a parsed ChipHDL as input and
+//! producing equivalent VHDL code.
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -15,6 +15,9 @@ use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::infer_widths;
 
+/// Creates the TCL script for generating a Quartus Prime project.
+/// This includes the PIN assignments for DE1-SoC board, and the default
+/// chip implementations (NAND, DFF, etc.).
 pub fn create_quartus_project(
     chip: &ChipHDL,
     chips_vhdl: HashMap<String, String>,
