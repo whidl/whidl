@@ -2,7 +2,7 @@ name: cargo build
 
 on:
   push:
-    branches: [ "main", "releases/**" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main", "releases/**" ]
 
