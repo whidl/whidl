@@ -2195,6 +2195,6 @@ mod test {
         };
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
-        assert!(chip.is_err());
+        assert!(chip.is_ok());
     }
 }
