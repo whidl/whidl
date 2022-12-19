@@ -1,0 +1,18 @@
+name: cargo test
+
+on:
+  push:
+    branches: [ "main", "releases/**" ]
+  pull_request:
+    branches: [ "main", "releases/**" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo test --release
