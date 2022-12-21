@@ -504,7 +504,7 @@ pub fn synth_vhdl(
                     }
                 }
             }
-            Part::Assignment(a) => {}
+            Part::AssignmentHDL(a) => {}
         }
     }
 
@@ -734,7 +734,7 @@ pub fn synth_vhdl(
                     component_counter
                 )?;
             }
-            Part::Assignment(a) => {}
+            Part::AssignmentHDL(a) => {}
         }
     }
 
@@ -840,7 +840,7 @@ fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
                     }
                 }
             }
-            Part::Assignment(a) => {}
+            Part::AssignmentHDL(a) => {}
         }
     }
 

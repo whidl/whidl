@@ -14,7 +14,7 @@ use std::rc::Rc;
 pub enum Part {
     Component(Component),
     Loop(Loop),
-    Assignment(Assignment),
+    AssignmentHDL(AssignmentHDL),
 }
 
 /// The Parse Tree for an HDL Chip.
@@ -149,7 +149,7 @@ pub struct Loop {
 
 #[derive(Clone)]
 /// Designates two wire names. The signal from the right wire will be assigned to the left.
-pub struct Assignment { 
+pub struct AssignmentHDL { 
     pub left: BusHDL,
     pub right: BusHDL,
 }
@@ -203,7 +203,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             name: String::from("BUFFER"),
             ports: vec![
                 GenericPort {
-                    name: Identifier::from("in"),
+                    name: Identifier::from("in"), // how to get the widths here?
                     width: GenericWidth::Terminal(Terminal::Num(1)), // default value that will update later
                     direction: PortDirection::In,
                 },
@@ -698,7 +698,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                  let wire_ident = self.scanner.peek().unwrap();
                  self.consume(TokenType::Identifier)?;
                  // wire_ident if the rhs, ident is the left-hand side
-                 let assign = Assignment {
+                 let assign = AssignmentHDL {
                      left: BusHDL {
                          name: ident.lexeme.clone(),
                          start: None,
@@ -712,7 +712,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                  };
 
                  self.consume(TokenType::Semicolon)?;
-                 return Ok(Part::Assignment(assign));
+                 return Ok(Part::AssignmentHDL(assign));
              }
          }
 
