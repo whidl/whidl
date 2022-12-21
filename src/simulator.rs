@@ -707,7 +707,6 @@ impl Chip {
                         continue;
                     }
                 };
-/*
                 let (target_node, target_bus) = match get_signal_source(
                     a.left.name.as_str(), j,
                     &Identifier::from(a.left.name.as_str()))? {
@@ -716,12 +715,13 @@ impl Chip {
                         continue;
                     }
                 };
-*/
+                /*
                 let target_port = make_port_chip(a.left.name.clone().as_str(),
                                                  a.width,
                                                  self_ptr,
                                                  &self.hdl_provider);
                 let target_node = self.circuit.add_node(target_port);
+                 */
                 let wire = Wire {
                     source: source_bus.clone(),
                     target: Bus {
@@ -729,7 +729,7 @@ impl Chip {
                         range: Some(j..j + 1),
                     },
                 };
-                self.circuit.add_edge(*source_node, target_node, wire);
+                self.circuit.add_edge(*source_node, *target_node, wire);
             }
         }
 
