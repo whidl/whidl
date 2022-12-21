@@ -205,8 +205,6 @@ impl Chip {
         if hdl.name.to_uppercase() == "NAND" {
             return Ok(make_nand_chip(parent, hdl_provider));
         } 
-        //else if hdl.name.to_uppercase() == "BUFFER" {
-        //    return Ok(make_buffer_chip(parent, hdl_provider));
         else if hdl.name.to_uppercase() == "DFF" {
             return Ok(make_dff_chip(parent, hdl_provider));
         }
@@ -247,7 +245,7 @@ impl Chip {
         }
 
         // Create component definitions (expand for-generate loops).
-        let mut components = Self::generate_components(hdl, generics)?;
+        let components = Self::generate_components(hdl, generics)?;
         let assignments = gather_assignments(&hdl.parts);
 
         let general_generics: Vec<GenericWidth> = generics
@@ -449,7 +447,6 @@ impl Chip {
                 source.push(Some((assignment_port_node, source_bus)));
             }
 
-            // Use the left hand side as the actual identifier?
             signal_sources.insert(a.left.name.clone(), source);
         }
 
@@ -696,7 +693,7 @@ impl Chip {
         };
 
 
-
+        // Add edges for assignments
         for a in &self.assignments {
             for j in 0..a.width {
                 let (source_node, source_bus) = match get_signal_source(
@@ -707,7 +704,7 @@ impl Chip {
                         continue;
                     }
                 };
-                let (target_node, target_bus) = match get_signal_source(
+                let (target_node, _target_bus) = match get_signal_source(
                     a.left.name.as_str(), j,
                     &Identifier::from(a.left.name.as_str()))? {
                     Some(x) => x,
@@ -715,13 +712,6 @@ impl Chip {
                         continue;
                     }
                 };
-                /*
-                let target_port = make_port_chip(a.left.name.clone().as_str(),
-                                                 a.width,
-                                                 self_ptr,
-                                                 &self.hdl_provider);
-                let target_node = self.circuit.add_node(target_port);
-                 */
                 let wire = Wire {
                     source: source_bus.clone(),
                     target: Bus {
@@ -1056,20 +1046,6 @@ impl Chip {
                     self.mark_neighbors(component_idx, dirty_dffs);
                 }
             }
-            /*
-            let mut buffers = Vec::new();
-            for c in self.components.clone() { // NOTE: iterate over a reference, and clone the matching components instead
-                if c.name.value.to_uppercase() == "BUFFER" {
-                    buffers.push(c);
-                }
-            }
-            for b in buffers {
-                for m in b.mappings {
-                    let r = self.signals.get_name(m.wire.name.as_str());
-                    self.signals.insert_option(&Bus::from(m.port.name.as_str()), r);
-                }
-            }
-            */
         }
 
 
@@ -1337,49 +1313,6 @@ fn make_port_chip(
     Chip {
         name: String::from(name),
         ports,
-        signals,
-        hdl: None,
-        elaborated: true,
-        circuit,
-        dirty: false,
-        input_port_nodes: Vec::new(),
-        output_port_nodes: Vec::new(),
-        cache: false,
-        parent,
-        hdl_provider: Rc::clone(hdl_provider),
-        variables: HashMap::new(),
-        components: Vec::new(),
-        assignments: Vec::new(),
-    }
-}
-
-fn make_buffer_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip {
-    let circuit = Circuit::new();
-    //let ports = HashMap::new();
-    let mut signals = BusMap::new();
-    signals.create_bus("in", 1).unwrap();
-    signals.create_bus("out", 1).unwrap();
-
-    Chip {
-        name: String::from("BUFFER"),
-        ports: HashMap::from([
-            (
-                String::from("in"),
-                Port {
-                    direction: PortDirection::In,
-                    name: Identifier::from("in"),
-                    width: 1,
-                },
-            ),
-            (
-                String::from("out"),
-                Port {
-                    direction: PortDirection::Out,
-                    name: Identifier::from("out"),
-                    width: 1,
-                },
-            ),
-        ]),
         signals,
         hdl: None,
         elaborated: true,
@@ -1803,6 +1736,15 @@ mod test {
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
     }
+
+    #[test]
+    fn test_simulator_buffer2() {
+        let mut simulator = make_simulator("Buffer2.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
+
 
     #[test]
     fn test_nand2tetris_solution_and() {
