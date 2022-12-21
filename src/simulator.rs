@@ -433,26 +433,24 @@ impl Chip {
 
         // Insert signal sources for every assignment.
         for a in &self.assignments {
+            let port_chip = make_port_chip(
+                a.left.name.clone().as_str(),
+                a.width,
+                self_ptr,
+                &self.hdl_provider);
+            let assignment_port_node = self.circuit.add_node(port_chip);
+
+            let mut source = Vec::new();
             for i in 0..a.width {
-                let port_chip = make_port_chip(
-                    a.right.name.clone().as_str(),
-                    a.width,
-                    self_ptr,
-                    &self.hdl_provider);
-                let assignment_port_node = self.circuit.add_node(port_chip);
-
-                let mut source = Vec::new();
-                for i in 0..a.width {
-                    let source_bus = Bus {
-                        name: String::from("in"),
-                        range: Some(i..i + 1),
-                    };
-                    source.push(Some((assignment_port_node, source_bus)));
-                }
-
-                // Use the left hand side as the actual identifier?
-                signal_sources.insert(a.left.name.clone(), source);
+                let source_bus = Bus {
+                    name: String::from("in"),
+                    range: Some(i..i + 1),
+                };
+                source.push(Some((assignment_port_node, source_bus)));
             }
+
+            // Use the left hand side as the actual identifier?
+            signal_sources.insert(a.left.name.clone(), source);
         }
 
 
@@ -594,11 +592,6 @@ impl Chip {
                 }
             }
 
-            // MAYBE PUT IT HERE?
-             
-
-        
-
             // Make sure we have inputs for every port bit.
             // for each port in the used busmap
             // if any bit is None, then warn.
@@ -724,12 +717,15 @@ impl Chip {
                     }
                 };
 */
-                let target_port = make_port_chip(a.left.name.clone().as_str(), a.width, self_ptr, &self.hdl_provider);
+                let target_port = make_port_chip(a.left.name.clone().as_str(),
+                                                 a.width,
+                                                 self_ptr,
+                                                 &self.hdl_provider);
                 let target_node = self.circuit.add_node(target_port);
                 let wire = Wire {
                     source: source_bus.clone(),
                     target: Bus {
-                        name: String::from("out"),
+                        name: String::from("in"),
                         range: Some(j..j + 1),
                     },
                 };
