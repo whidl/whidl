@@ -1651,12 +1651,24 @@ pub fn infer_widths(
                                 ),
                                 kind: ErrorKind::ParseIdentError(
                                     provider.clone(),
-                                    Identifier::from(wname.as_str()), // make wname a &str instead of String
+                                    Identifier::from(wname.as_str()),
                                 ),
                             }));
                         }
                     }
-                    (None, None) => {} // If neither wire is ever referenced, just ignore it
+                    (None, None) => {
+                        return Err(Box::new(N2VError {
+                            msg: format!(
+                                "Signals {} and {} have no source or destination.",
+                                &a.left.name.clone(),
+                                &a.right.name.clone(),
+                            ),
+                            kind: ErrorKind::ParseIdentError(
+                                provider.clone(),
+                                Identifier::from(a.right.name.clone().as_str()),
+                            ),
+                        }));
+                    } // If neither wire is ever referenced, just ignore it
                 }
             }
             break;

@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
-use crate::simulator::infer_widths;
+use crate::simulator::{infer_widths, gather_assignments};
 
 pub fn create_quartus_project(
     chip: &ChipHDL,
@@ -445,7 +445,7 @@ fn keyw(name: &str) -> String {
 
 /// Synthesizes VHDL for a top-level chip and all of its components.
 ///
-/// `hdl` - HDL for the chip to convert to VHDL.
+/// `hdl` - HDL for the chip to converit to VHDL.
 /// `provider` - Responsible for fetching HDL files
 /// `generic_params` - Instantiate the top-level chip with this parameter list.
 pub fn synth_vhdl(
@@ -504,7 +504,7 @@ pub fn synth_vhdl(
                     }
                 }
             }
-            Part::AssignmentHDL(a) => {}
+            Part::AssignmentHDL(_a) => {}
         }
     }
 
@@ -514,8 +514,8 @@ pub fn synth_vhdl(
     let components = generate_components(hdl)?;
 
     // NOTE: Modify this later to consider assignments
-    let placeholder_assignments = Vec::new();
-    let inferred_widths = infer_widths(hdl, &placeholder_assignments, &components, provider, &Vec::new())?;
+    let assignments = gather_assignments(&hdl.parts);
+    let inferred_widths = infer_widths(hdl, &assignments, &components, provider, &Vec::new())?;
     let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
 
     let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
@@ -571,18 +571,25 @@ pub fn synth_vhdl(
                 for mapping in c.mappings.iter() {
                     // Print the declaration for the signal required for this mapping.
                     if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                        // Get the width of the current wire in the mapping
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                        // evaluate the wire width along with any generic variables if its needed
                         let sig = print_signal(
                             &mapping.wire.name,
                             &eval_expr(wire_width, &component_variables),
                         );
+
+                        // insert the evaluated signal into the signals for this component 
                         signals.insert(sig);
                     }
 
+                    // Get the direction for the port of the mapping
                     let port_direction = &component_hdl.get_port(&mapping.port.name)?.direction;
+                    // Create port mappings from the port and wires
                     let (vhdl_port_name, port_range, wire_name, wire_range) =
                         port_mapping(&component_hdl, mapping, &inferred_widths)?;
 
+                    // add the mapping to the port map depending on its direction
                     if port_direction == &PortDirection::In {
                         port_map.push(format!(
                             "{}{} => {}{}",
@@ -734,8 +741,43 @@ pub fn synth_vhdl(
                     component_counter
                 )?;
             }
-            Part::AssignmentHDL(a) => {}
+            Part::AssignmentHDL(_a) => {}
         }
+    }
+
+    // Add signal declarations and assignments to arch_vhdl
+    let mut ports = HashSet::<String>::new();
+    for port in &hdl.ports {
+        ports.insert(port.name.value.clone());
+    }
+    for a in assignments.clone() {
+        let mut declarations = HashSet::new();
+        let left_name = keyw(a.left.name.as_str());
+        let right_name = keyw(a.right.name.as_str());
+        // If one side of the assignment is actually a port, or if it has already been declared, ignore it
+        if !ports.contains(&left_name) && !declarations.contains(&left_name) {
+            writeln!(
+                &mut arch_vhdl,
+                "{}", 
+                print_signal(&left_name, &(a.left.end.unwrap() - a.left.start.unwrap()))
+            )?;
+            declarations.insert(left_name);
+        }
+        if !ports.contains(&right_name) && !declarations.contains(&right_name) {
+            writeln!(
+                &mut arch_vhdl,
+                "{}", 
+                print_signal(&right_name, &(a.right.end.unwrap() - a.right.start.unwrap()))
+            )?;
+            declarations.insert(right_name);
+        }
+    }
+    for a in assignments {
+        writeln!(
+            &mut arch_vhdl,
+            "{} <= {}",
+            keyw(a.left.name.as_str()), keyw(a.right.name.as_str())
+        )?;
     }
 
     for s in &signals {
@@ -840,7 +882,7 @@ fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
                     }
                 }
             }
-            Part::AssignmentHDL(a) => {}
+            Part::AssignmentHDL(_a) => {}
         }
     }
 
