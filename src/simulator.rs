@@ -254,7 +254,7 @@ impl Chip {
             .collect();
         let inferred_widths = infer_widths(hdl, &assignments, &components, hdl_provider, &general_generics)?;
 
-        let generated_assignments = Self::generate_buffers(&inferred_widths, assignments, &variables)?;
+        let generated_assignments = Self::generate_assignments(&inferred_widths, assignments, &variables)?;
 
         // Create disconnected internal signals.
         // These are connected below.
@@ -919,8 +919,7 @@ impl Chip {
     }
     
     /// Turns a list of AssignmentHDL into Assignments for easier computation
-    fn generate_buffers(
-       // &self,
+    fn generate_assignments(
         inferred_widths: &HashMap<String, GenericWidth>,
         assignments: Vec<AssignmentHDL>,
         generic_state: &HashMap<String, usize> 
@@ -1668,7 +1667,7 @@ pub fn infer_widths(
                                 Identifier::from(a.right.name.clone().as_str()),
                             ),
                         }));
-                    } // If neither wire is ever referenced, just ignore it
+                    } // If neither wire is ever referenced, throw an error
                 }
             }
             break;
