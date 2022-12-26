@@ -198,25 +198,6 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             path: None,
             generic_decls: Vec::new(),
         });
-    } else if name.to_lowercase() == "buffer" {
-        return Ok(ChipHDL {
-            name: String::from("BUFFER"),
-            ports: vec![
-                GenericPort {
-                    name: Identifier::from("in"), // how to get the widths here?
-                    width: GenericWidth::Terminal(Terminal::Num(1)), // default value that will update later
-                    direction: PortDirection::In,
-                },
-                GenericPort {
-                    name: Identifier::from("out"),
-                    width: GenericWidth::Terminal(Terminal::Num(1)),
-                    direction: PortDirection::Out,
-                },
-            ],
-            parts: Vec::new(),
-            path: None,
-            generic_decls: Vec::new(),
-        });
     }
     else if name.to_lowercase() == "dff" {
         // Hard-coded DFF chip
@@ -674,47 +655,46 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn component(&mut self) -> Result<Part, Box<dyn Error>> {
         // Turn this
         let ident = self.scanner.next().unwrap();
+        let ident_bus_widths = self.bus_idx()?;
 
-        // TODO: loop this section and check for range expressions [i..j]
-        let peeked = self.scanner
-                         .peek()
+        let peeked = self.scanner.peek()
                          .expect("Expected an angle bracket or paren after an identifier.");
-         if let Token {
-                token_type: TokenType::LeftAngle,
+        if let Token {
+            token_type: TokenType::LeftAngle,
+            ..
+        } = peeked {
+            self.consume(TokenType::LeftAngle)?;
+
+            let peeked1 = self.scanner.peek()
+                              .expect("Expected and equals sign or a generic declaration");
+            if let Token {
+                token_type: TokenType::Equal,
                 ..
-            } = peeked {
-            // Have to perform manual port mappings for now
-            // Seperate the buffer mappings into a seperate function?
-             self.consume(TokenType::LeftAngle)?;
+            } = peeked1 {
+                self.consume(TokenType::Equal)?;
+                let wire_ident = self.scanner.peek().unwrap();
+                self.consume(TokenType::Identifier)?;
+                let wire_ident_bus_widths = self.bus_idx()?;
 
-             let peeked1 = self.scanner
-                               .peek()
-                               .expect("Expected and equals sign or a generic declaration");
-             if let Token {
-                 token_type: TokenType::Equal,
-                 ..
-             } = peeked1 {
-                 self.consume(TokenType::Equal)?;
-                 let wire_ident = self.scanner.peek().unwrap();
-                 self.consume(TokenType::Identifier)?;
-                 // wire_ident if the rhs, ident is the left-hand side
-                 let assign = AssignmentHDL {
-                     left: BusHDL {
-                         name: ident.lexeme.clone(),
-                         start: None,
-                         end: None,
-                     },
-                     right: BusHDL {
-                         name: wire_ident.lexeme.clone(),
-                         start: None,
-                         end: None,
-                     }
-                 };
 
-                 self.consume(TokenType::Semicolon)?;
-                 return Ok(Part::AssignmentHDL(assign));
-             }
-         }
+                // wire_ident if the rhs, ident is the left-hand side
+                let assign = AssignmentHDL {
+                    left: BusHDL {
+                        name: ident.lexeme.clone(),
+                        start: None,
+                        end: None,
+                    },
+                    right: BusHDL {
+                        name: wire_ident.lexeme.clone(),
+                        start: None,
+                        end: None,
+                    }
+                };
+
+                self.consume(TokenType::Semicolon)?;
+                return Ok(Part::AssignmentHDL(assign));
+            }
+        }
 
         return Ok(Part::Component(Component {
             name: Identifier::from(ident),

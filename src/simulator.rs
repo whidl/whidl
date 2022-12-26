@@ -1425,18 +1425,9 @@ pub fn infer_widths(
 
     let mut inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
     let mut last_inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
-
-    // Go through twice to make sure that all of the inferred widths work
-    // with every mapping.
-    //let mut buffers = Vec::new();
     loop {
         last_inferred_widths = inferred_widths.clone();
         for part in components {
-            // Skip any buffer chips. They will be evaluated after everything else
-            //if part.name.value.clone() == String::from("buffer") {
-            //    buffers.push(part);
-            //    continue;
-            //}
 
             let component_hdl = get_hdl(&part.name.value, provider)?;
             // Convert generics with vars to concrete generics for component.
@@ -1628,33 +1619,59 @@ pub fn infer_widths(
             }
         }
         if inferred_widths == last_inferred_widths {
-            for a in assignments {
-                let wl = inferred_widths.get(&a.left.name.clone());
-                let wr = inferred_widths.get(&a.right.name.clone());
+            loop {
+                last_inferred_widths = inferred_widths.clone();
+                for a in assignments {
+                    let wl = inferred_widths.get(&a.left.name.clone());
+                    let wr = inferred_widths.get(&a.right.name.clone());
 
-                match (wl, wr) {
-                    (Some(w), None) => {
-                        inferred_widths.insert(a.right.name.clone(), w.clone());
-                    }
-                    (None, Some(w)) => {
-                        inferred_widths.insert(a.left.name.clone(), w.clone());
-                    }
-                    (Some(w1), Some(w2)) => {
-                        if w1 != w2 {
-                            let wname = a.right.name.clone();
+                    match (wl, wr) {
+                        (Some(w), None) => {
+                            inferred_widths.insert(a.right.name.clone(), w.clone());
+                        }
+                        (None, Some(w)) => {
+                            inferred_widths.insert(a.left.name.clone(), w.clone());
+                        }
+                        (Some(w1), Some(w2)) => {
+                            if w1 != w2 {
+                                let wname = a.right.name.clone();
+                                return Err(Box::new(N2VError {
+                                    msg: format!(
+                                        "Signal widths of {} and {} are not equal.",
+                                        &a.left.name.clone(),
+                                        &a.right.name.clone(),
+                                    ),
+                                    kind: ErrorKind::ParseIdentError(
+                                        provider.clone(),
+                                        Identifier::from(wname.as_str()),
+                                    ),
+                                }));
+                            }
+                        }
+                        (None, None) => {
+                            /*
                             return Err(Box::new(N2VError {
                                 msg: format!(
-                                    "Signal widths of {} and {} are not equal.",
+                                    "Signals {} and {} have no source or destination.",
                                     &a.left.name.clone(),
                                     &a.right.name.clone(),
                                 ),
                                 kind: ErrorKind::ParseIdentError(
                                     provider.clone(),
-                                    Identifier::from(wname.as_str()),
+                                    Identifier::from(a.right.name.clone().as_str()),
                                 ),
                             }));
+                        } // If neither wire is ever referenced, throw an error
+                             */
                         }
                     }
+                }
+                if inferred_widths == last_inferred_widths {
+                    break;
+                }
+            }
+            for a in assignments {
+                match (inferred_widths.get(&a.left.name.clone()), inferred_widths.get(&a.right.name.clone())) {
                     (None, None) => {
                         return Err(Box::new(N2VError {
                             msg: format!(
@@ -1667,7 +1684,8 @@ pub fn infer_widths(
                                 Identifier::from(a.right.name.clone().as_str()),
                             ),
                         }));
-                    } // If neither wire is ever referenced, throw an error
+                    }
+                    _ => {}
                 }
             }
             break;
@@ -1756,6 +1774,13 @@ mod test {
         assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
     }
 
+    #[test]
+    fn test_simulator_buffer3() {
+        let mut simulator = make_simulator("BufferTest3.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
 
     #[test]
     fn test_nand2tetris_solution_and() {
