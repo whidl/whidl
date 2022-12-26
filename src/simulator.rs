@@ -1619,7 +1619,7 @@ pub fn infer_widths(
             }
         }
         if inferred_widths == last_inferred_widths {
-            loop {
+            loop { // This runs until fixpoint as well to deal with multiple layers of redirection
                 last_inferred_widths = inferred_widths.clone();
                 for a in assignments {
                     let wl = inferred_widths.get(&a.left.name.clone());
@@ -1648,22 +1648,7 @@ pub fn infer_widths(
                                 }));
                             }
                         }
-                        (None, None) => {
-                            /*
-                            return Err(Box::new(N2VError {
-                                msg: format!(
-                                    "Signals {} and {} have no source or destination.",
-                                    &a.left.name.clone(),
-                                    &a.right.name.clone(),
-                                ),
-                                kind: ErrorKind::ParseIdentError(
-                                    provider.clone(),
-                                    Identifier::from(a.right.name.clone().as_str()),
-                                ),
-                            }));
-                        } // If neither wire is ever referenced, throw an error
-                             */
-                        }
+                        (None, None) => {}
                     }
                 }
                 if inferred_widths == last_inferred_widths {
@@ -1672,6 +1657,7 @@ pub fn infer_widths(
             }
             for a in assignments {
                 match (inferred_widths.get(&a.left.name.clone()), inferred_widths.get(&a.right.name.clone())) {
+                    // If neither widths have a source, throw an error. This allows us to make assumptions about widths later on.
                     (None, None) => {
                         return Err(Box::new(N2VError {
                             msg: format!(
