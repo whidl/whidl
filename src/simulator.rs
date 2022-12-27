@@ -204,8 +204,7 @@ impl Chip {
 
         if hdl.name.to_uppercase() == "NAND" {
             return Ok(make_nand_chip(parent, hdl_provider));
-        } 
-        else if hdl.name.to_uppercase() == "DFF" {
+        } else if hdl.name.to_uppercase() == "DFF" {
             return Ok(make_dff_chip(parent, hdl_provider));
         }
 
@@ -252,9 +251,16 @@ impl Chip {
             .iter()
             .map(|x| GenericWidth::Terminal(Terminal::Num(*x)))
             .collect();
-        let inferred_widths = infer_widths(hdl, &assignments, &components, hdl_provider, &general_generics)?;
+        let inferred_widths = infer_widths(
+            hdl,
+            &assignments,
+            &components,
+            hdl_provider,
+            &general_generics,
+        )?;
 
-        let generated_assignments = Self::generate_assignments(&inferred_widths, assignments, &variables)?;
+        let generated_assignments =
+            Self::generate_assignments(&inferred_widths, assignments, &variables)?;
 
         // Create disconnected internal signals.
         // These are connected below.
@@ -284,8 +290,6 @@ impl Chip {
                 }));
             }
         }
-
-        
 
         let ports = hdl
             .ports
@@ -318,7 +322,7 @@ impl Chip {
             hdl_provider: Rc::clone(hdl_provider),
             variables,
             components,
-            assignments: generated_assignments
+            assignments: generated_assignments,
         };
 
         if elaborate {
@@ -435,7 +439,8 @@ impl Chip {
                 a.left.name.clone().as_str(),
                 a.width,
                 self_ptr,
-                &self.hdl_provider);
+                &self.hdl_provider,
+            );
             let assignment_port_node = self.circuit.add_node(port_chip);
 
             let mut source = Vec::new();
@@ -449,7 +454,6 @@ impl Chip {
 
             signal_sources.insert(a.left.name.clone(), source);
         }
-
 
         let mut need_true_literal = false;
         let mut need_false_literal = false;
@@ -692,21 +696,24 @@ impl Chip {
             }
         };
 
-
         // Add edges for assignments
         for a in &self.assignments {
             for j in 0..a.width {
                 let (source_node, source_bus) = match get_signal_source(
-                    a.right.name.as_str(), j,
-                    &Identifier::from(a.right.name.as_str()))? {
+                    a.right.name.as_str(),
+                    j,
+                    &Identifier::from(a.right.name.as_str()),
+                )? {
                     Some(x) => x,
                     None => {
                         continue;
                     }
                 };
                 let (target_node, _target_bus) = match get_signal_source(
-                    a.left.name.as_str(), j,
-                    &Identifier::from(a.left.name.as_str()))? {
+                    a.left.name.as_str(),
+                    j,
+                    &Identifier::from(a.left.name.as_str()),
+                )? {
                     Some(x) => x,
                     None => {
                         continue;
@@ -917,12 +924,12 @@ impl Chip {
             }
         }
     }
-    
+
     /// Turns a list of AssignmentHDL into Assignments for easier computation
     fn generate_assignments(
         inferred_widths: &HashMap<String, GenericWidth>,
         assignments: Vec<AssignmentHDL>,
-        generic_state: &HashMap<String, usize> 
+        generic_state: &HashMap<String, usize>,
     ) -> Result<Vec<Assignment>, Box<dyn Error>> {
         let mut converted_assignments = Vec::<Assignment>::new();
         for a in assignments {
@@ -946,7 +953,7 @@ impl Chip {
             };
             converted_assignments.push(new_assignment);
         }
-        Ok(converted_assignments)        
+        Ok(converted_assignments)
     }
 
     fn compute(
@@ -989,8 +996,7 @@ impl Chip {
                 self.signals.insert_option(&Bus::from("out"), r);
                 return Ok(());
             }
-                
-            
+
             let cache_entry = InputCacheEntry {
                 name: self.name.clone(),
                 signals: self.get_port_values_for_direction(PortDirection::In),
@@ -1046,7 +1052,6 @@ impl Chip {
                 }
             }
         }
-
 
         // populate output buses
         for &port_idx in &self.output_port_nodes {
@@ -1424,11 +1429,13 @@ pub fn infer_widths(
     }
 
     let mut inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
+    for port in &hdl.ports {
+        inferred_widths.insert(port.name.value.clone(), eval_expr(&port.width, &variables));
+    }
     let mut last_inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
     loop {
         last_inferred_widths = inferred_widths.clone();
         for part in components {
-
             let component_hdl = get_hdl(&part.name.value, provider)?;
             // Convert generics with vars to concrete generics for component.
             // e.g. Mux<W> needs to become Mux<4> if W=4. At this point
@@ -1619,7 +1626,8 @@ pub fn infer_widths(
             }
         }
         if inferred_widths == last_inferred_widths {
-            loop { // This runs until fixpoint as well to deal with multiple layers of redirection
+            loop {
+                // This runs until fixpoint as well to deal with multiple layers of redirection
                 last_inferred_widths = inferred_widths.clone();
                 for a in assignments {
                     let wl = inferred_widths.get(&a.left.name.clone());
@@ -1656,7 +1664,10 @@ pub fn infer_widths(
                 }
             }
             for a in assignments {
-                match (inferred_widths.get(&a.left.name.clone()), inferred_widths.get(&a.right.name.clone())) {
+                match (
+                    inferred_widths.get(&a.left.name.clone()),
+                    inferred_widths.get(&a.right.name.clone()),
+                ) {
                     // If neither widths have a source, throw an error. This allows us to make assumptions about widths later on.
                     (None, None) => {
                         return Err(Box::new(N2VError {
@@ -1766,6 +1777,14 @@ mod test {
         let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer4() {
+        let mut simulator = make_simulator("Buffer4.hdl");
+        let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(false)]);
     }
 
     #[test]
