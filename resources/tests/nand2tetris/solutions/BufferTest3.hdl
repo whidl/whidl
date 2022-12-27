@@ -1,4 +1,4 @@
-CHIP BTest2 {
+CHIP BTest3 {
     IN testin;
     OUT testout;
 
