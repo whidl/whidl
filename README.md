@@ -1,4 +1,7 @@
-# whidl
+# WHiDL
+
+![cargo build](https://github.com/whidl/whidl/actions/workflows/build.yml/badge.svg)
+![cargo test](https://github.com/whidl/whidl/actions/workflows/test.yml/badge.svg)
 
 ## Using whidl to synthesize ROMs for the CS 314 Toy ARM computer
 
