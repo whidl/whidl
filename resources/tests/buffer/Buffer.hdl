@@ -3,7 +3,7 @@ CHIP BTest {
     OUT testout;
 
     PARTS:
-    And(a=testin, b=true, out=andout);
-	Or(a=andout, b=false, out=orout);
-	testout <= orout;
+     And(a=testin, b=true, out=andout);
+	 Or(a=andout, b=false, out=orout);
+	 testout <= orout;
 }

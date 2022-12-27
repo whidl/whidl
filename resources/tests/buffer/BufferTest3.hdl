@@ -1,4 +1,4 @@
-CHIP BTest2 {
+CHIP BTest3 {
     IN testin;
     OUT testout;
 
@@ -8,5 +8,5 @@ CHIP BTest2 {
     b <= c;
     d <= v;
 
-    testout <= b
+    testout <= b;
 }
