@@ -1,11 +1,17 @@
+//! This module is responsible for reading test scripts (.tst files) in the
+//! nand2tetris test script format. The `bitvec` crate is used to support
+//! number system operations.
+//! 
+//! The maximum test input size is 16 bits.
+
 use crate::busmap::BusMap;
 use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
 use crate::scanner::Scanner;
 use crate::simulator::{Bus, Chip, Port, Simulator};
 use crate::test_parser::*;
-/// For dealing with nand2tetris tests
 use crate::test_scanner::TestScanner;
+
 use bitvec::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
@@ -15,6 +21,10 @@ use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
 
+/// Converts a test input (string + number system) to a bit vector.
+/// 
+/// The bit vector is the binary representation of the input value.
+/// The most significant bit comes first, and the least significant bit last.
 fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     match input.number_system {
         NumberSystem::Decimal => {
@@ -48,6 +58,8 @@ fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     }
 }
 
+/// Converts a bitvec to a vector of option bools. This conversion is 
+/// necessary because the simulator uses `Vec<Option<bool>>` to represent inputs.
 fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
     let mut res = Vec::new();
     for bit in bv {
@@ -56,7 +68,8 @@ fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
     res
 }
 
-/// Reads a nand2tetris cmp file and returns a busmap of values
+/// Reads a nand2tetris .cmp file and returns a vector of busmaps.
+/// Each busmap represents a single line in the .cmp file.
 fn read_cmp(
     path: &PathBuf,
     test_script: &TestScript,
@@ -166,6 +179,10 @@ fn read_cmp(
     Ok(res)
 }
 
+/// Runs a test script. 
+///
+/// If a test fails a message will print to stdout and this function
+/// returns an error.
 pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
     // Parse the test script
     let test_pathbuf = PathBuf::from(test_script_path);
@@ -295,6 +312,7 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Reads test script file and returns its contents as a String.
 fn read_test(path: &PathBuf) -> Result<String, Box<dyn Error>> {
     Ok(fs::read_to_string(path)?)
 }

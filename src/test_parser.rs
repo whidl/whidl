@@ -15,25 +15,30 @@ pub struct TestScript {
     pub generics: Vec<usize>,
 }
 
-#[derive(Clone)]
-pub enum Instruction {
-    Set(String, InputValue), // (port name, port value)
-    Eval,
-    Output,
-    Tick,
-    Tock,
-}
-
+/// An input value for a port in the test script.
+/// An input is a string, and the number system used to interpret that string.
 #[derive(Clone)]
 pub struct InputValue {
     pub number_system: NumberSystem,
     pub value: String,
 }
 
+/// A step consists of a sequence of instructions.
 #[derive(Clone)]
 pub struct Step {
     pub instructions: Vec<Instruction>,
 }
+#[derive(Clone)]
+
+/// An single action for the simulator to perform.
+pub enum Instruction {
+    Set(String, InputValue),        // (port name, port value) set port name to port value.
+    Eval,                           // Run the simulator on the current inputs.
+    Output,                         // Print/verify the results.
+    Tick,                           // first half of clock cycle.
+    Tock,                           // second half of clock cycle.
+}
+
 
 #[derive(Clone)]
 pub struct OutputFormat {
