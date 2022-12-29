@@ -395,7 +395,7 @@ impl Chip {
                         }
                     }
                 }
-                Part::AssignmentHDL(a) => {} // ignore assignments for now
+                Part::AssignmentHDL(_a) => {} // ignore assignments for now
             }
         }
 
@@ -433,8 +433,17 @@ impl Chip {
             signal_sources.insert(port.name.value.clone(), source);
         }
 
+        let mut need_true_literal = false;
+        let mut need_false_literal = false;
+
         // Insert signal sources for every assignment.
         for a in &self.assignments {
+            if &a.right.name == "true" {
+                need_true_literal = true;
+            }
+            if &a.right.name == "false" {
+                need_false_literal = true;
+            }
             let port_chip = make_port_chip(
                 a.left.name.clone().as_str(),
                 a.width,
@@ -454,9 +463,6 @@ impl Chip {
 
             signal_sources.insert(a.left.name.clone(), source);
         }
-
-        let mut need_true_literal = false;
-        let mut need_false_literal = false;
 
         // Create components and handle out ports from components into signals
         // indices of created_components needs to match order of parts
@@ -1785,6 +1791,14 @@ mod test {
         let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer_literal() {
+        let mut simulator = make_simulator("BufferLiterals.hdl");
+        let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
     }
 
     #[test]

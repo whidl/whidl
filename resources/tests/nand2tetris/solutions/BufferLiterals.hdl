@@ -1,0 +1,8 @@
+CHIP Buffer {
+    IN in;
+    OUT out;
+
+    PARTS:
+    DUMMY <= in;
+    out <= true;
+}
