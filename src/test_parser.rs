@@ -1,5 +1,7 @@
 use crate::error::{ErrorKind, N2VError};
 use crate::test_scanner::{TestScanner, Token, TokenType};
+
+use std::error::Error;
 use std::path::PathBuf;
 
 /// The Parse Tree for an HDL Chip.
@@ -32,13 +34,12 @@ pub struct Step {
 
 /// An single action for the simulator to perform.
 pub enum Instruction {
-    Set(String, InputValue),        // (port name, port value) set port name to port value.
-    Eval,                           // Run the simulator on the current inputs.
-    Output,                         // Print/verify the results.
-    Tick,                           // first half of clock cycle.
-    Tock,                           // second half of clock cycle.
+    Set(String, InputValue), // (port name, port value) set port name to port value.
+    Eval,                    // Run the simulator on the current inputs.
+    Output,                  // Print/verify the results.
+    Tick,                    // first half of clock cycle.
+    Tock,                    // second half of clock cycle.
 }
-
 
 #[derive(Clone)]
 pub struct OutputFormat {
@@ -83,14 +84,14 @@ pub struct TestParser<'a, 'b> {
 }
 
 impl<'a, 'b> TestParser<'a, 'b> {
-    pub fn parse(&mut self) -> Result<TestScript, N2VError> {
+    pub fn parse(&mut self) -> Result<TestScript, Box<dyn Error>> {
         self.test_script()
     }
 
-    fn consume(&mut self, tt: TokenType) -> Result<Token, N2VError> {
+    fn consume(&mut self, tt: TokenType) -> Result<Token, Box<dyn Error>> {
         let t = self.scanner.next();
         match &t {
-            None => Err(N2VError {
+            None => Err(Box::new(N2VError {
                 msg: format!("Early end of file expected {:?}", tt),
                 kind: ErrorKind::TestParseError(Token {
                     lexeme: String::from(""),
@@ -98,24 +99,24 @@ impl<'a, 'b> TestParser<'a, 'b> {
                     line: self.scanner.line,
                     token_type: TokenType::Eof,
                 }),
-            }),
+            })),
             Some(t) => {
                 if t.token_type == tt {
                     Ok(t.clone())
                 } else {
-                    Err(N2VError {
+                    Err(Box::new(N2VError {
                         msg: format!(
                             "Expected token type {:?}, found {:?} ({})",
                             tt, t.token_type, t.lexeme
                         ),
                         kind: ErrorKind::TestParseError(t.clone()),
-                    })
+                    }))
                 }
             }
         }
     }
 
-    fn test_script(&mut self) -> Result<TestScript, N2VError> {
+    fn test_script(&mut self) -> Result<TestScript, Box<dyn Error>> {
         // Load cannot be a keyword because it is used as a port name.
         if self.consume(TokenType::Identifier).unwrap().lexeme != "load" {
             panic!("Expected load.");
@@ -151,7 +152,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         })
     }
 
-    fn steps(&mut self) -> Result<Vec<Step>, N2VError> {
+    fn steps(&mut self) -> Result<Vec<Step>, Box<dyn Error>> {
         let mut res: Vec<Step> = Vec::new();
         loop {
             if self.scanner.peek().is_none() {
@@ -244,7 +245,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         Instruction::Output
     }
 
-    fn output_list(&mut self) -> Result<Vec<OutputFormat>, N2VError> {
+    fn output_list(&mut self) -> Result<Vec<OutputFormat>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         self.consume(TokenType::OutputList)?;
@@ -323,7 +324,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         Ok(res)
     }
 
-    fn generics(&mut self) -> Result<Vec<usize>, N2VError> {
+    fn generics(&mut self) -> Result<Vec<usize>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {
