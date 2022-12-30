@@ -1796,7 +1796,7 @@ mod test {
     #[test]
     fn test_simulator_buffer_literal() {
         let mut simulator = make_simulator("BufferLiterals.hdl");
-        let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
+        let inputs = BusMap::try_from([("in", true)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
     }
