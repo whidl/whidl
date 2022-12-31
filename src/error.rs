@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 // Error type enum
+#[derive(Clone)]
 pub enum ErrorKind {
     ParseError(crate::scanner::Token),
     ParseIdentError(Rc<dyn HdlProvider>, crate::parser::Identifier),
@@ -21,9 +22,33 @@ pub struct N2VError {
     pub kind: ErrorKind,
 }
 
+pub struct TransformedError {
+    pub msg: String,
+    pub kind: ErrorKind,
+    pub source: Option<Box<dyn Error + 'static>>,
+}
+
 impl std::fmt::Debug for N2VError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Debug for TransformedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Display for TransformedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.source.is_some() {
+            write!(f, "{}", N2VError::from(self))?;
+            let error_source = &**(self.source.as_ref().unwrap());
+            write!(f, "{}", error_source)
+        } else {
+            write!(f, "{}", N2VError::from(self))
+        }
     }
 }
 
@@ -36,7 +61,7 @@ impl std::fmt::Display for N2VError {
                     Ok(x) => x,
                     Err(_) => {
                         writeln!(f, "In : {:?}", t.path.clone());
-                        return writeln!(f, "Error: {}", self.msg);
+                        return writeln!(f, "{}", self.msg);
                     }
                 };
 
@@ -65,10 +90,10 @@ impl std::fmt::Display for N2VError {
             }
             ErrorKind::ParseIdentError(provider, ident) => {
                 if ident.path.is_none() {
-                    return writeln!(f, "Error 1: {}", self.msg);
+                    return writeln!(f, "{}", self.msg);
                 }
                 if ident.line.is_none() {
-                    return writeln!(f, "Error 2: {}", self.msg);
+                    return writeln!(f, "{}", self.msg);
                 }
 
                 let hdl = match provider.get_hdl(
@@ -84,7 +109,7 @@ impl std::fmt::Display for N2VError {
                     Ok(x) => x,
                     Err(e) => {
                         writeln!(f, "{:?}", e);
-                        return writeln!(f, "Error 3: {}", self.msg);
+                        return writeln!(f, "{}", self.msg);
                     }
                 };
 
@@ -101,17 +126,8 @@ impl std::fmt::Display for N2VError {
                 writeln!(f, "\n\n{}", self.msg)
             }
             _ => {
-                writeln!(f, "Error 4: {}", self.msg)
+                writeln!(f, "{}", self.msg)
             }
-        }
-    }
-}
-
-impl From<std::io::Error> for N2VError {
-    fn from(e: std::io::Error) -> Self {
-        N2VError {
-            msg: format!("IO Error: {}", e),
-            kind: ErrorKind::IOError,
         }
     }
 }
@@ -125,8 +141,26 @@ impl From<String> for N2VError {
     }
 }
 
+impl From<&TransformedError> for N2VError {
+    fn from(e: &TransformedError) -> Self {
+        N2VError {
+            msg: e.msg.clone(),
+            kind: e.kind.clone(),
+        }
+    }
+}
+
 impl Error for N2VError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+impl Error for TransformedError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.source {
+            None => None,
+            Some(e) => Some(&**e),
+        }
     }
 }

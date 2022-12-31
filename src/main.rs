@@ -14,7 +14,7 @@ mod test_script;
 mod vhdl;
 
 use error::{ErrorKind, N2VError};
-use modelsim::{synth_vhdl_test};
+use modelsim::synth_vhdl_test;
 use parser::*;
 use simulator::{Bus, Chip, Simulator};
 use test_script::run_test;
@@ -106,16 +106,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     match &cli.command {
         Commands::SynthVHDL { output_dir, path } => {
             // Try synthesizing a Chip. If that fails, try synthesizing a test.
-            if synth_vhdl_chip(output_dir, path).is_err()
-                && synth_vhdl_test(output_dir, path).is_err()
-            {
-                return Err(Box::new(N2VError {
-                    msg: format!(
-                        "Unable to parse {} as either an HDL file or a test script.",
-                        path.display()
-                    ),
-                    kind: ErrorKind::Other,
-                }));
+            let vhdl_result = synth_vhdl_chip(output_dir, path);
+            if vhdl_result.is_err() {
+                let synth_result = synth_vhdl_test(output_dir, path);
+
+                if synth_result.is_err() {
+                    println!("Parsing as chip:\n{}", vhdl_result.unwrap_err());
+                    println!("Parsing as test script:\n{}", synth_result.unwrap_err());
+                    return Err(Box::new(N2VError {
+                        msg: format!(
+                            "Unable to parse {} as either an HDL file or a test script.",
+                            path.display(),
+                        ),
+                        kind: ErrorKind::Other,
+                    }));
+                }
             }
         }
         Commands::Check { top_level_file } => {

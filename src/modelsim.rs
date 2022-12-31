@@ -3,13 +3,14 @@
 
 use std::error::Error;
 use std::fmt;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path};
+use std::path::Path;
 
 use bitvec::prelude::*;
 
-use crate::error::{ErrorKind, N2VError};
+use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::test_parser::TestScript;
 use crate::test_script::parse_test;
 use crate::{Bus, PortMapping};
@@ -54,9 +55,9 @@ impl fmt::Display for TestBench {
 }
 
 /// Converts a nand2tetris test script file to a VHDL testbench to be run
-/// with Modelsim. This will convert the test script itself, and the 
+/// with Modelsim. This will convert the test script itself, and the
 /// HDL for the chip that is being tested.
-/// 
+///
 /// - `output_dir`: The directory to create that will house the generated
 ///     VHDL files.
 /// - `test_script_path`: Path to the test script to convert.
@@ -75,9 +76,46 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     };
 
     let test_bench_path = output_dir.join(test_script_filename).with_extension("vhdl");
-    let mut testbench_file = File::create(test_bench_path)?;
+    fs::create_dir(&test_bench_path.parent().unwrap())?;
+    let mut testbench_file = match File::create(&test_bench_path) {
+        Err(e) => {
+            return Err(Box::new(TransformedError {
+                msg: format!(
+                    "Error creating test bench file {}",
+                    &test_bench_path.display()
+                ),
+                kind: ErrorKind::IOError,
+                source: Some(Box::new(e)),
+            }))
+        }
+        Ok(f) => f,
+    };
     let test_bench_vhdl = test_bench.to_string();
     testbench_file.write_all(test_bench_vhdl.as_bytes())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    // Test that Modelsim simulation passes for And chip.
+    fn test_and() {
+        // Synthesize Modelsim test bench for input .tst script
+        let tst_path = PathBuf::from("resources/tests/nand2tetris/solutions/And.tst");
+        let temp_dir = tempdir().unwrap();
+        println!("Temp dir: {}", temp_dir.path().display());
+
+        let synth_result = synth_vhdl_test(temp_dir.path(), &tst_path);
+        if synth_result.is_err() {
+            println!("{}", synth_result.unwrap_err());
+            panic!();
+        }
+
+        // 2. Run Modelsim and assert that all tests passed.
+    }
 }
