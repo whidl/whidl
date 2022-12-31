@@ -1,7 +1,0 @@
-CHIP Buffer {
-    IN in;
-    OUT out;
-
-    PARTS:
-    out <= in;
-}
