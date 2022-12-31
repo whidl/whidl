@@ -1520,15 +1520,11 @@ mod test {
 
     fn make_simulator(file_name: &str) -> Simulator {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl(file_name).unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path(file_name));
@@ -2051,15 +2047,11 @@ mod test {
     #[test]
     fn test_optimize_circuit_and16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("And16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("And16.hdl"));
@@ -2075,15 +2067,11 @@ mod test {
     #[test]
     fn test_optimize_circuit_useand16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = "CHIP And {
       IN a[16], b[16];
@@ -2106,15 +2094,11 @@ mod test {
     #[test]
     fn test_optimize_circuit_inc16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Inc16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("Inc16.hdl"));
@@ -2132,14 +2116,7 @@ mod test {
     #[test]
     fn test_assign_multiple_error() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssign.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
@@ -2156,14 +2133,7 @@ mod test {
     #[test]
     fn test_assign_multiple_ok() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssignOK.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssignOK.hdl"));
@@ -2179,14 +2149,7 @@ mod test {
     #[test]
     fn test_disconnected_component_inputs() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Disconnected.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));

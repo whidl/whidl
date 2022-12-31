@@ -6,7 +6,7 @@ use crate::Scanner;
 use serde::Serialize;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -57,13 +57,8 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    pub fn new(base_path: &str) -> FileReader {
-        if base_path.is_empty() {
-            panic!("empty basepath, start file paths in the same directory with ./");
-        }
-        FileReader {
-            base_path: PathBuf::from(base_path),
-        }
+    pub fn new(base_path: &Path) -> FileReader {
+        FileReader { base_path: base_path.to_path_buf() }
     }
 }
 
@@ -160,6 +155,25 @@ pub struct PortMapping {
     pub wire_ident: Identifier,
     pub wire: BusHDL,
     pub port: BusHDL,
+}
+
+/// Parses and on-disk HDL file.
+///
+/// - `hdl_path`: Path to the HDL file to parse.
+///
+/// Returns a tuple of the parsed HDL and the accompanying FileReader
+/// HDL provider.
+pub fn parse_hdl_path(hdl_path: &Path) -> Result<(ChipHDL, FileReader), Box<dyn Error>> {
+    let base_path = hdl_path.parent().unwrap();
+    let hdl_file = hdl_path.file_name().unwrap().to_str().unwrap();
+    let provider = FileReader::new(base_path);
+    let contents = provider.get_hdl(hdl_file).unwrap();
+    let mut scanner = Scanner::new(contents.as_str(), provider.get_path(hdl_file));
+    let mut parser = Parser {
+        scanner: &mut scanner,
+    };
+    let hdl = parser.parse()?;
+    Ok((hdl, provider))
 }
 
 /// Looks up chip definition for a chip.

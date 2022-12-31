@@ -15,13 +15,17 @@ use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::infer_widths;
 
+/// Creates a quartus prime project inside project_dir
+///
+/// - `chip`: The parsed HDL of the top-level chip to convert to VHDL.
+/// ` `chips_vhdl`: The VHDL files (strings) of all supporting chips.
+/// - `project_dir` - The directory to place the quartus prime project. This
+///                 directory should already exist.
 pub fn create_quartus_project(
     chip: &ChipHDL,
     chips_vhdl: HashMap<String, String>,
     project_dir: &Path,
-) -> std::io::Result<()> {
-    // check to see if the directory exists. panic if it exists/
-    fs::create_dir(project_dir)?;
+) -> Result<(), Box<dyn Error>> {
     let mut tcl = format!("project_new {} -overwrite", chip.name);
 
     tcl.push_str(&String::from(
@@ -203,8 +207,7 @@ pub fn create_quartus_project(
         tcl,
         "set_global_assignment -name TOP_LEVEL_ENTITY {}",
         keyw(&chip.name)
-    )
-    .unwrap();
+    )?;
 
     // write out each vhdl file
     for (chip_name, chip_vhdl) in &chips_vhdl {
@@ -215,8 +218,7 @@ pub fn create_quartus_project(
             tcl,
             "set_global_assignment -name VHDL_FILE {}",
             chip_filename
-        )
-        .unwrap();
+        )?;
     }
 
     let nand_vhdl = r#"
@@ -276,21 +278,21 @@ end architecture arch;
     Ok(())
 }
 
-fn generics(chip: &ChipHDL) -> String {
+fn generics(chip: &ChipHDL) -> Result<String, Box<dyn Error>> {
     let mut vhdl = String::new();
 
     let mut generics = Vec::new();
     for g in &chip.generic_decls {
         let mut generic_vhdl = String::new();
-        write!(&mut generic_vhdl, "{} : positive", keyw(&g.value)).unwrap();
+        write!(&mut generic_vhdl, "{} : positive", keyw(&g.value))?;
         generics.push(generic_vhdl);
     }
 
     if !generics.is_empty() {
-        writeln!(&mut vhdl, "generic ({});", generics.join(";\n")).unwrap();
+        writeln!(&mut vhdl, "generic ({});", generics.join(";\n"))?;
     }
 
-    vhdl
+    Ok(vhdl)
 }
 
 fn ports(chip: &ChipHDL) -> String {
@@ -443,6 +445,30 @@ fn keyw(name: &str) -> String {
     }
 }
 
+/// Converts a wire name and width into a signal declaration.
+///
+/// `signal_name`: The name of the signal to declare.
+/// `signal_width`: The width of the signal to declare.
+pub fn signal_declaration(
+    signal_name: &str,
+    signal_width: &GenericWidth,
+) -> Result<String, Box<dyn Error>> {
+    let mut vhdl: String = String::new();
+
+    write!(&mut vhdl, "signal {} ", keyw(signal_name))?;
+    if let GenericWidth::Terminal(Terminal::Num(1)) = signal_width {
+        write!(&mut vhdl, ": std_logic;")?;
+    } else {
+        write!(
+            &mut vhdl,
+            ": std_logic_vector({} downto 0);",
+            signal_width - &GenericWidth::Terminal(Terminal::Num(1))
+        )?;
+    }
+
+    Ok(vhdl)
+}
+
 /// Synthesizes VHDL for a top-level chip and all of its components.
 ///
 /// `hdl` - HDL for the chip to convert to VHDL.
@@ -462,7 +488,7 @@ pub fn synth_vhdl(
     // Final VHDL generated for the top-level chip.
     let mut top_level_vhdl = String::new();
 
-    write_top_level_entity(hdl, &mut top_level_vhdl);
+    write_top_level_entity(hdl, &mut top_level_vhdl)?;
 
     writeln!(
         &mut top_level_vhdl,
@@ -484,9 +510,9 @@ pub fn synth_vhdl(
 
                 // Generate component declarations for components used by this chip.
                 // Only output one declaration even if the component is used multiple times.
-                let generated_declaration = generate_component_declaration(c, provider);
+                let generated_declaration = generate_component_declaration(c, provider)?;
                 if !component_decls.contains(&generated_declaration) {
-                    write!(&mut top_level_vhdl, "{}", &generated_declaration).unwrap();
+                    write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
                     component_decls.insert(generated_declaration);
                 }
             }
@@ -497,7 +523,7 @@ pub fn synth_vhdl(
 
                     // Generate component declarations for components used by this chip.
                     // Only output one declaration even if the component is used multiple times.
-                    let generated_declaration = generate_component_declaration(c, provider);
+                    let generated_declaration = generate_component_declaration(c, provider)?;
                     if !component_decls.contains(&generated_declaration) {
                         write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
                         component_decls.insert(generated_declaration);
@@ -513,25 +539,6 @@ pub fn synth_vhdl(
     let components = generate_components(hdl)?;
     let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
     let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
-
-    let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
-        let mut new_signal: String = String::new();
-        if !port_names.contains(&keyw(wire_name)) {
-            write!(&mut new_signal, "signal {} ", keyw(wire_name)).unwrap();
-            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
-                write!(&mut new_signal, ": std_logic;").unwrap();
-            } else {
-                write!(
-                    &mut new_signal,
-                    ": std_logic_vector({} downto 0);",
-                    wire_width - &GenericWidth::Terminal(Terminal::Num(1))
-                )
-                .unwrap();
-            }
-        }
-
-        new_signal
-    };
 
     let mut signals: HashSet<String> = HashSet::new();
 
@@ -566,12 +573,16 @@ pub fn synth_vhdl(
                 let mut redirected_ports: HashSet<String> = HashSet::new();
                 for mapping in c.mappings.iter() {
                     // Print the declaration for the signal required for this mapping.
-                    if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                    let signal_name = &mapping.wire.name;
+                    if signal_name != "true"
+                        && signal_name != "false"
+                        && !port_names.contains(&keyw(signal_name))
+                    {
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = print_signal(
+                        let sig = signal_declaration(
                             &mapping.wire.name,
                             &eval_expr(wire_width, &component_variables),
-                        );
+                        )?;
                         signals.insert(sig);
                     }
 
@@ -600,10 +611,10 @@ pub fn synth_vhdl(
                         )?;
 
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = print_signal(
+                        let sig = signal_declaration(
                             &redirect_signal,
                             &eval_expr(wire_width, &component_variables),
-                        );
+                        )?;
                         signals.insert(sig);
                     }
                 }
@@ -655,12 +666,16 @@ pub fn synth_vhdl(
                         let mut redirected_ports: HashSet<String> = HashSet::new();
                         for mapping in c.mappings.iter() {
                             // Print the declaration for the signal required for this mapping.
-                            if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                            let signal_name = &mapping.wire.name;
+                            if signal_name != "true"
+                                && signal_name != "false"
+                                && !port_names.contains(&keyw(signal_name))
+                            {
                                 let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
+                                let sig = signal_declaration(
                                     &mapping.wire.name,
                                     &eval_expr(wire_width, &component_variables),
-                                );
+                                )?;
                                 signals.insert(sig);
                             }
 
@@ -693,10 +708,10 @@ pub fn synth_vhdl(
                                 .unwrap();
 
                                 let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
+                                let sig = signal_declaration(
                                     &redirect_signal,
                                     &eval_expr(wire_width, &component_variables),
-                                );
+                                )?;
                                 signals.insert(sig);
                             } else {
                                 port_map.push(format!(
@@ -754,14 +769,19 @@ pub fn synth_vhdl(
     Ok(entities)
 }
 
-fn write_top_level_entity(hdl: &ChipHDL, top_level_vhdl: &mut String) {
+fn write_top_level_entity(
+    hdl: &ChipHDL,
+    top_level_vhdl: &mut String,
+) -> Result<(), Box<dyn Error>> {
     writeln!(top_level_vhdl, "entity {} is", keyw(&hdl.name)).unwrap();
     if !hdl.generic_decls.is_empty() {
-        writeln!(top_level_vhdl, "{}", generics(hdl)).unwrap();
+        writeln!(top_level_vhdl, "{}", generics(hdl)?)?;
     }
-    writeln!(top_level_vhdl, "{}", ports(hdl)).unwrap();
-    writeln!(top_level_vhdl, "end entity {};", keyw(&hdl.name)).unwrap();
-    writeln!(top_level_vhdl).unwrap();
+    writeln!(top_level_vhdl, "{}", ports(hdl))?;
+    writeln!(top_level_vhdl, "end entity {};", keyw(&hdl.name))?;
+    writeln!(top_level_vhdl)?;
+
+    Ok(())
 }
 
 /// Generates VHDL corresponding to a component (and subcomponents). This will be the same
@@ -785,7 +805,10 @@ fn generate_component_definition(
 
 /// Generates the declaration for a component that can be included in the VHDL.
 /// of another chip that uses this component.
-fn generate_component_declaration(component: &Component, provider: &Rc<dyn HdlProvider>) -> String {
+fn generate_component_declaration(
+    component: &Component,
+    provider: &Rc<dyn HdlProvider>,
+) -> Result<String, Box<dyn Error>> {
     let component_hdl = get_hdl(&component.name.value, provider).unwrap();
     let mut component_decl = String::new();
     writeln!(
@@ -794,11 +817,12 @@ fn generate_component_declaration(component: &Component, provider: &Rc<dyn HdlPr
         keyw(&component_hdl.name)
     )
     .unwrap();
-    write!(&mut component_decl, "{}", generics(&component_hdl)).unwrap();
-    write!(&mut component_decl, "{}", ports(&component_hdl)).unwrap();
-    writeln!(&mut component_decl, "end component;").unwrap();
-    writeln!(&mut component_decl).unwrap();
-    component_decl
+    write!(&mut component_decl, "{}", generics(&component_hdl)?)?;
+    write!(&mut component_decl, "{}", ports(&component_hdl))?;
+    writeln!(&mut component_decl, "end component;")?;
+    writeln!(&mut component_decl)?;
+
+    Ok(component_decl)
 }
 
 fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
@@ -866,20 +890,11 @@ mod test {
             scanner: &mut scanner,
         };
         let hdl = parser.parse().expect("Parse error");
-        let base_path = String::from(
-            hdl.path
-                .as_ref()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .to_str()
-                .unwrap(),
-        );
-        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+        let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
         let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
-        let temp_dir = tempdir().unwrap();
-        let quartus_dir = temp_dir.path().join("dummy");
-        crate::vhdl::create_quartus_project(&hdl, entities, &quartus_dir)
+        let temp_dir = tempdir().expect("Unable to create temp directory for test.");
+        crate::vhdl::create_quartus_project(&hdl, entities, temp_dir.path())
             .expect("Unable to create project");
     }
 }
