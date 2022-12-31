@@ -10,9 +10,9 @@ use std::path::Path;
 use bitvec::prelude::*;
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
+use crate::parser::parse_hdl_path;
 use crate::test_parser::TestScript;
 use crate::test_script::parse_test;
-use crate::parser::parse_hdl_path;
 use crate::{Bus, PortMapping};
 
 /// This structure represents a Modelsim testbench.
@@ -42,10 +42,10 @@ impl TryFrom<TestScript> for TestBench {
 
     fn try_from(test_script: TestScript) -> Result<Self, Box<dyn Error>> {
         // Parse the HDL file?
-        let hdl = parse_hdl_path(&test_script.hdl_path);
+        let (hdl, file_reader) = parse_hdl_path(&test_script.hdl_path)?;
 
         Ok(TestBench {
-            chip_name: String::from(""),
+            chip_name: hdl.name,
             signals: Vec::new(),
             port_maps: Vec::new(),
             instructions: Vec::new(),
@@ -53,10 +53,16 @@ impl TryFrom<TestScript> for TestBench {
     }
 }
 
+/// Converts a TestBench into VHDL.
 impl fmt::Display for TestBench {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "library ieee;")?;
-        writeln!(f, "ieee.std_logic_1164.all;")
+        writeln!(f, "ieee.std_logic_1164.all;\n")?;
+
+        let entity_name = self.chip_name.clone() + "_test";
+        writeln!(f, "-- Empty entity because this is just a test script.")?;
+        writeln!(f, "entity {} is", entity_name)?;
+        writeln!(f, "end entity {};", entity_name)
     }
 }
 
