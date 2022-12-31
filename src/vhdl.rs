@@ -16,7 +16,7 @@ use crate::parser::*;
 use crate::simulator::infer_widths;
 
 /// Creates a quartus prime project inside project_dir
-/// 
+///
 /// - `chip`: The parsed HDL of the top-level chip to convert to VHDL.
 /// ` `chips_vhdl`: The VHDL files (strings) of all supporting chips.
 /// - `project_dir` - The directory to place the quartus prime project. This
@@ -880,9 +880,8 @@ mod test {
         let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
         let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
-        let temp_dir = tempdir().unwrap();
-        let quartus_dir = temp_dir.path().join("dummy");
-        crate::vhdl::create_quartus_project(&hdl, entities, &quartus_dir)
+        let temp_dir = tempdir().expect("Unable to create temp directory for test.");
+        crate::vhdl::create_quartus_project(&hdl, entities, temp_dir.path())
             .expect("Unable to create project");
     }
 }
