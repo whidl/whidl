@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::{prelude::*, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
 
@@ -193,7 +193,7 @@ fn read_cmp(
     Ok(res)
 }
 
-fn parse_test(test_script_path: &str) -> Result<TestScript, Box<dyn Error>> {
+pub fn parse_test(test_script_path: &Path) -> Result<TestScript, Box<dyn Error>> {
     let test_pathbuf = PathBuf::from(test_script_path);
     let test_contents = read_test(&test_pathbuf)?;
     let mut test_scanner = TestScanner::new(test_contents.as_str(), test_pathbuf);
@@ -207,7 +207,7 @@ fn parse_test(test_script_path: &str) -> Result<TestScript, Box<dyn Error>> {
 ///
 /// If a test fails a message will print to stdout and this function
 /// returns an error.
-pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
     //let hdl_path = test_pathbuf.parent().unwrap().join(&test_script.hdl_file);
     let test_script = parse_test(test_script_path)?;
 
@@ -347,168 +347,168 @@ mod test {
     #[test]
     fn test_nand2tetris_solution_not() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Not.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_and() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/And.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_or() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Or.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_xor() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Xor.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_not16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Not16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_and16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/And16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux4way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux4Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux8way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux4Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux4way16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux4Way16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_or8way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Or8Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_halfadder() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/HalfAdder.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_fulladder() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/HalfAdder.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_alu() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/ALU.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_bit() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Bit.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_register() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Register.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram8() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM8.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram512() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM512.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram4k() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM4K.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram16k() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM16K.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_add16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Add16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_inc16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Inc16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_pc() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/PC.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_cpu() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/CPU.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_arm_add16() {
         let path = construct_path(&PathBuf::from("arm/Add16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_arm_ops_mux8way3() {
         let path = construct_path(&PathBuf::from("arm/Mux8Way3.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 }

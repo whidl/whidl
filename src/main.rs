@@ -1,19 +1,24 @@
+//! This is the main command-line utility.
+
 mod busmap;
 mod error;
 mod expr;
+mod modelsim;
 mod parser;
 mod rom;
 mod scanner;
-pub mod simulator; // hack to deal with dead code warning
+mod simulator;
 mod test_parser;
 mod test_scanner;
 mod test_script;
 mod vhdl;
 
-use crate::error::{ErrorKind, N2VError};
-use crate::parser::*;
-use crate::simulator::{Bus, Chip, Simulator};
-use crate::test_script::run_test;
+use error::{ErrorKind, N2VError};
+use modelsim::{synth_vhdl_test};
+use parser::*;
+use simulator::{Bus, Chip, Simulator};
+use test_script::run_test;
+
 use clap::Parser as ArgParser;
 use clap::Subcommand;
 use object::{Object, ObjectSection};
@@ -35,11 +40,20 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Creates VHDL and Quartus TCL.
+    /// This command can be used to convert
+    /// an HDL file to VHDL, or a nand2tetris test into a Modelsim testbench.
+    /// The output is a TCL script for creating a Quartus Prime project
+    /// using quartus_sh, or a testbench to run with Modelsim.
     SynthVHDL {
-        /// lists test values
+        /// The synth-vhdl command creates a Quartus Prime project in
+        /// a new folder. This is the folder to create for the project.
         #[clap(short, long, action)]
         output_dir: PathBuf,
-        top_level_file: String,
+
+        /// Path to either a top-level HDL file or a .tst test script to
+        /// convert from nand2tetris from to VHDL.
+        #[clap(short, long, action)]
+        path: PathBuf,
     },
 
     /// Parses chip and simulates a single input, for catching errors.
@@ -62,34 +76,47 @@ enum Commands {
     Decode { thumb_binary: String },
 }
 
+fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let source_code = fs::read_to_string(&hdl_path)?;
+    let mut scanner = Scanner::new(&source_code, hdl_path.clone());
+    let mut parser = Parser {
+        scanner: &mut scanner,
+    };
+    let hdl = parser.parse()?;
+    let base_path = String::from(
+        hdl.path
+            .as_ref()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    );
+    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+    let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
+    let quartus_dir = Path::new(&output_dir);
+    crate::vhdl::create_quartus_project(&hdl, entities, quartus_dir)?;
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::SynthVHDL {
-            output_dir,
-            top_level_file,
-        } => {
-            let source_code = fs::read_to_string(&top_level_file)?;
-            let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-            let mut parser = Parser {
-                scanner: &mut scanner,
-            };
-            let hdl = parser.parse().expect("Parse error");
-            let base_path = String::from(
-                hdl.path
-                    .as_ref()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
-            );
-            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-            let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
-            let quartus_dir = Path::new(&output_dir);
-            crate::vhdl::create_quartus_project(&hdl, entities, quartus_dir)
-                .expect("Unable to create project");
+        Commands::SynthVHDL { output_dir, path } => {
+            // Try synthesizing a Chip. If that fails, try synthesizing a test.
+            if synth_vhdl_chip(output_dir, path).is_err()
+                && synth_vhdl_test(output_dir, path).is_err()
+            {
+                return Err(Box::new(N2VError {
+                    msg: format!(
+                        "Unable to parse {} as either an HDL file or a test script.",
+                        path.display()
+                    ),
+                    kind: ErrorKind::Other,
+                }));
+            }
         }
         Commands::Check { top_level_file } => {
             let source_code = fs::read_to_string(&top_level_file)?;
@@ -154,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         Commands::Test { test_file } => {
-            run_test(test_file)?;
+            run_test(&PathBuf::from(test_file))?;
         }
         Commands::Rom { thumb_binary } => {
             let bin_data = fs::read(thumb_binary)?;
