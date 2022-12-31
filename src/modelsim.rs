@@ -50,7 +50,8 @@ impl From<TestScript> for TestBench {
 
 impl fmt::Display for TestBench {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "hello from testbench")
+        writeln!(f, "library ieee;")?;
+        writeln!(f, "ieee.std_logic_1164.all;")
     }
 }
 
