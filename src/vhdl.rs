@@ -445,6 +445,30 @@ fn keyw(name: &str) -> String {
     }
 }
 
+/// Converts a wire name and width into a signal declaration.
+///
+/// `signal_name`: The name of the signal to declare.
+/// `signal_width`: The width of the signal to declare.
+pub fn signal_declaration(
+    signal_name: &str,
+    signal_width: &GenericWidth,
+) -> Result<String, Box<dyn Error>> {
+    let mut vhdl: String = String::new();
+
+    write!(&mut vhdl, "signal {} ", keyw(signal_name))?;
+    if let GenericWidth::Terminal(Terminal::Num(1)) = signal_width {
+        write!(&mut vhdl, ": std_logic;")?;
+    } else {
+        write!(
+            &mut vhdl,
+            ": std_logic_vector({} downto 0);",
+            signal_width - &GenericWidth::Terminal(Terminal::Num(1))
+        )?;
+    }
+
+    Ok(vhdl)
+}
+
 /// Synthesizes VHDL for a top-level chip and all of its components.
 ///
 /// `hdl` - HDL for the chip to convert to VHDL.
@@ -516,25 +540,6 @@ pub fn synth_vhdl(
     let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
     let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
 
-    let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
-        let mut new_signal: String = String::new();
-        if !port_names.contains(&keyw(wire_name)) {
-            write!(&mut new_signal, "signal {} ", keyw(wire_name)).unwrap();
-            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
-                write!(&mut new_signal, ": std_logic;").unwrap();
-            } else {
-                write!(
-                    &mut new_signal,
-                    ": std_logic_vector({} downto 0);",
-                    wire_width - &GenericWidth::Terminal(Terminal::Num(1))
-                )
-                .unwrap();
-            }
-        }
-
-        new_signal
-    };
-
     let mut signals: HashSet<String> = HashSet::new();
 
     for (component_counter, part) in hdl.parts.iter().enumerate() {
@@ -568,12 +573,16 @@ pub fn synth_vhdl(
                 let mut redirected_ports: HashSet<String> = HashSet::new();
                 for mapping in c.mappings.iter() {
                     // Print the declaration for the signal required for this mapping.
-                    if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                    let signal_name = &mapping.wire.name;
+                    if signal_name != "true"
+                        && signal_name != "false"
+                        && !port_names.contains(&keyw(signal_name))
+                    {
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = print_signal(
+                        let sig = signal_declaration(
                             &mapping.wire.name,
                             &eval_expr(wire_width, &component_variables),
-                        );
+                        )?;
                         signals.insert(sig);
                     }
 
@@ -602,10 +611,10 @@ pub fn synth_vhdl(
                         )?;
 
                         let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = print_signal(
+                        let sig = signal_declaration(
                             &redirect_signal,
                             &eval_expr(wire_width, &component_variables),
-                        );
+                        )?;
                         signals.insert(sig);
                     }
                 }
@@ -657,12 +666,16 @@ pub fn synth_vhdl(
                         let mut redirected_ports: HashSet<String> = HashSet::new();
                         for mapping in c.mappings.iter() {
                             // Print the declaration for the signal required for this mapping.
-                            if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
+                            let signal_name = &mapping.wire.name;
+                            if signal_name != "true"
+                                && signal_name != "false"
+                                && !port_names.contains(&keyw(signal_name))
+                            {
                                 let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
+                                let sig = signal_declaration(
                                     &mapping.wire.name,
                                     &eval_expr(wire_width, &component_variables),
-                                );
+                                )?;
                                 signals.insert(sig);
                             }
 
@@ -695,10 +708,10 @@ pub fn synth_vhdl(
                                 .unwrap();
 
                                 let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
+                                let sig = signal_declaration(
                                     &redirect_signal,
                                     &eval_expr(wire_width, &component_variables),
-                                );
+                                )?;
                                 signals.insert(sig);
                             } else {
                                 port_map.push(format!(

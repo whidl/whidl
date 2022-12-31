@@ -41,8 +41,7 @@ impl TryFrom<TestScript> for TestBench {
     type Error = Box<dyn Error>;
 
     fn try_from(test_script: TestScript) -> Result<Self, Box<dyn Error>> {
-        // Parse the HDL file?
-        let (hdl, file_reader) = parse_hdl_path(&test_script.hdl_path)?;
+        let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
 
         Ok(TestBench {
             chip_name: hdl.name,
@@ -56,13 +55,31 @@ impl TryFrom<TestScript> for TestBench {
 /// Converts a TestBench into VHDL.
 impl fmt::Display for TestBench {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Libraries
         writeln!(f, "library ieee;")?;
-        writeln!(f, "ieee.std_logic_1164.all;\n")?;
+        writeln!(f, "ieee.std_logic_1164.all;")?;
 
+        // Entity declaration
         let entity_name = self.chip_name.clone() + "_test";
+        writeln!(f)?;
         writeln!(f, "-- Empty entity because this is just a test script.")?;
         writeln!(f, "entity {} is", entity_name)?;
-        writeln!(f, "end entity {};", entity_name)
+        writeln!(f, "end entity {};", entity_name)?;
+
+        // === Begin Architecture ===
+        writeln!(f)?;
+        writeln!(f, "architecture test_arch of {} is", entity_name)?;
+
+        // Signals. We need to declare inputs and outputs of chip that we are testing.
+        for s in &self.signals {
+            // writeln!(f, "{}", crate::vhdl::signal_declaration(s))?;
+        }
+
+        // === End Architecture ===
+        writeln!(f, "end architecture test_arch;")?;
+
+        // End with a newline.
+        writeln!(f)
     }
 }
 
