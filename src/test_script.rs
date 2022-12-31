@@ -466,22 +466,22 @@ mod test {
     }
     #[test]
     fn test_buffer() {
-        let path = construct_path(&PathBuf::from("nand2tetris/solutions/Buffer.tst"));
+        let path = construct_path(&PathBuf::from("buffer/Buffer.tst"));
         assert!(run_test(path.to_str().unwrap()).is_ok());
     }
     #[test]
     fn test_buffer2() {
-        let path = construct_path(&PathBuf::from("nand2tetris/solutions/Buffer2.tst"));
+        let path = construct_path(&PathBuf::from("buffer/Buffer2.tst"));
         assert!(run_test(path.to_str().unwrap()).is_ok());
     }
     #[test]
     fn test_buffer3() {
-        let path = construct_path(&PathBuf::from("nand2tetris/solutions/BufferTest3.tst"));
+        let path = construct_path(&PathBuf::from("buffer/BufferTest3.tst"));
         assert!(run_test(path.to_str().unwrap()).is_ok());
     }
     #[test]
     fn test_buffer4() {
-        let path = construct_path(&PathBuf::from("nand2tetris/solutions/Buffer4.tst"));
+        let path = construct_path(&PathBuf::from("buffer/Buffer4.tst"));
         assert!(run_test(path.to_str().unwrap()).is_ok());
     }
 

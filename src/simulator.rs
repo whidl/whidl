@@ -1771,7 +1771,7 @@ mod test {
 
     #[test]
     fn test_simulator_buffer2() {
-        let mut simulator = make_simulator("Buffer2.hdl");
+        let mut simulator = make_simulator("../../buffer/Buffer2.hdl");
         let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
@@ -1779,7 +1779,7 @@ mod test {
 
     #[test]
     fn test_simulator_buffer3() {
-        let mut simulator = make_simulator("BufferTest3.hdl");
+        let mut simulator = make_simulator("../../buffer/BufferTest3.hdl");
         let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
@@ -1787,15 +1787,23 @@ mod test {
 
     #[test]
     fn test_simulator_buffer4() {
-        let mut simulator = make_simulator("Buffer4.hdl");
+        let mut simulator = make_simulator("../../buffer/Buffer4.hdl");
         let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(false)]);
     }
 
     #[test]
+    fn test_simulator_buffer5() {
+        let mut simulator = make_simulator("../../buffer/Buffer5.hdl");
+        let inputs = BusMap::try_from([("in", vec![true, false])]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true), Some(false)]);
+    }
+
+    #[test]
     fn test_simulator_buffer_literal() {
-        let mut simulator = make_simulator("BufferLiterals.hdl");
+        let mut simulator = make_simulator("../../buffer/BufferLiterals.hdl");
         let inputs = BusMap::try_from([("in", true)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
