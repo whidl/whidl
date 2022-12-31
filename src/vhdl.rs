@@ -15,13 +15,17 @@ use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::infer_widths;
 
+/// Creates a quartus prime project inside project_dir
+/// 
+/// - `chip`: The parsed HDL of the top-level chip to convert to VHDL.
+/// ` `chips_vhdl`: The VHDL files (strings) of all supporting chips.
+/// - `project_dir` - The directory to place the quartus prime project. This
+///                 directory should already exist.
 pub fn create_quartus_project(
     chip: &ChipHDL,
     chips_vhdl: HashMap<String, String>,
     project_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    // check to see if the directory exists. panic if it exists/
-    fs::create_dir(project_dir)?;
     let mut tcl = format!("project_new {} -overwrite", chip.name);
 
     tcl.push_str(&String::from(
@@ -873,16 +877,8 @@ mod test {
             scanner: &mut scanner,
         };
         let hdl = parser.parse().expect("Parse error");
-        let base_path = String::from(
-            hdl.path
-                .as_ref()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .to_str()
-                .unwrap(),
-        );
-        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+        let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
         let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
         let temp_dir = tempdir().unwrap();
         let quartus_dir = temp_dir.path().join("dummy");

@@ -210,46 +210,11 @@ pub fn parse_test(test_script_path: &Path) -> Result<TestScript, Box<dyn Error>>
 pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
     //let hdl_path = test_pathbuf.parent().unwrap().join(&test_script.hdl_file);
     let test_script = parse_test(test_script_path)?;
+    let (hdl, file_reader) = parse_hdl_path(&test_script.hdl_path)?;
+    let provider: Rc<dyn HdlProvider> = Rc::new(file_reader);
 
     // Create simulator for HDL file referenced by test script.
-    let base_path = test_script.hdl_file.parent().unwrap().to_str().unwrap();
-    let hdl_file = test_script.hdl_file.file_name().unwrap().to_str().unwrap();
-    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-    let contents = provider.get_hdl(hdl_file).unwrap();
-    let mut scanner = Scanner::new(contents.as_str(), provider.get_path(hdl_file));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = match parser.parse() {
-        Ok(x) => x,
-        Err(x) => {
-            println!("{}", x);
-            std::process::exit(1);
-        }
-    };
 
-    let chip = match Chip::new(
-        &hdl,
-        ptr::null_mut(),
-        &provider,
-        false,
-        &test_script.generics,
-    ) {
-        Ok(x) => x,
-        Err(x) => {
-            println!("{}", x);
-            std::process::exit(1);
-        }
-    };
-
-    let mut simulator = Simulator::new(chip);
-
-    let hdl_contents = fs::read_to_string(hdl_file)?;
-    let mut scanner = Scanner::new(hdl_contents.as_str(), test_script.hdl_file.clone());
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = parser.parse()?;
     let chip = Chip::new(
         &hdl,
         ptr::null_mut(),
@@ -258,12 +223,13 @@ pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
         &test_script.generics,
     )?;
 
-    let ports = chip.ports;
+    let mut simulator = Simulator::new(chip);
+
     let compare_path = PathBuf::from(test_script_path)
         .parent()
         .unwrap()
-        .join(&test_script.compare_file);
-    let expected = read_cmp(&compare_path, &test_script, &ports)?;
+        .join(&test_script.cmp_path);
+    let expected = read_cmp(&compare_path, &test_script, &simulator.chip.ports)?;
 
     let mut inputs = BusMap::new();
     let mut cmp_idx = 0;
@@ -273,7 +239,9 @@ pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
         for instruction in &step.instructions {
             match instruction {
                 Instruction::Set(port, value) => {
-                    let width = ports
+                    let width = simulator
+                        .chip
+                        .ports
                         .get(port)
                         .unwrap_or_else(|| panic!("No width for port {}", port))
                         .width;

@@ -3,7 +3,6 @@
 
 use std::error::Error;
 use std::fmt;
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -13,6 +12,7 @@ use bitvec::prelude::*;
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::test_parser::TestScript;
 use crate::test_script::parse_test;
+use crate::parser::parse_hdl_path;
 use crate::{Bus, PortMapping};
 
 /// This structure represents a Modelsim testbench.
@@ -37,14 +37,19 @@ pub enum Instruction {
     Assert(String, BitVec<u16, Msb0>, String),
 }
 
-impl From<TestScript> for TestBench {
-    fn from(test_script: TestScript) -> Self {
-        TestBench {
+impl TryFrom<TestScript> for TestBench {
+    type Error = Box<dyn Error>;
+
+    fn try_from(test_script: TestScript) -> Result<Self, Box<dyn Error>> {
+        // Parse the HDL file?
+        let hdl = parse_hdl_path(&test_script.hdl_path);
+
+        Ok(TestBench {
             chip_name: String::from(""),
             signals: Vec::new(),
             port_maps: Vec::new(),
             instructions: Vec::new(),
-        }
+        })
     }
 }
 
@@ -60,11 +65,12 @@ impl fmt::Display for TestBench {
 /// HDL for the chip that is being tested.
 ///
 /// - `output_dir`: The directory to create that will house the generated
-///     VHDL files.
+///     VHDL files. This directory must exist at the time of calling the
+///     function.
 /// - `test_script_path`: Path to the test script to convert.
 pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(), Box<dyn Error>> {
     let test_script = parse_test(test_script_path)?;
-    let test_bench = TestBench::from(test_script);
+    let test_bench: TestBench = TestBench::try_from(test_script)?;
 
     let test_script_filename = match test_script_path.file_name() {
         None => {
@@ -76,8 +82,9 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
         Some(x) => x,
     };
 
-    let test_bench_path = output_dir.join(test_script_filename).with_extension("tst.vhdl");
-    fs::create_dir(&test_bench_path.parent().unwrap())?;
+    let test_bench_path = output_dir
+        .join(test_script_filename)
+        .with_extension("tst.vhdl");
     let mut testbench_file = match File::create(&test_bench_path) {
         Err(e) => {
             return Err(Box::new(TransformedError {

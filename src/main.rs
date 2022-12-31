@@ -13,7 +13,7 @@ mod test_scanner;
 mod test_script;
 mod vhdl;
 
-use error::{ErrorKind, N2VError};
+use error::*;
 use modelsim::synth_vhdl_test;
 use parser::*;
 use simulator::{Bus, Chip, Simulator};
@@ -83,16 +83,8 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
         scanner: &mut scanner,
     };
     let hdl = parser.parse()?;
-    let base_path = String::from(
-        hdl.path
-            .as_ref()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-    );
-    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+    let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
     let quartus_dir = Path::new(&output_dir);
     crate::vhdl::create_quartus_project(&hdl, entities, quartus_dir)?;
@@ -106,6 +98,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     match &cli.command {
         Commands::SynthVHDL { output_dir, path } => {
             // Try synthesizing a Chip. If that fails, try synthesizing a test.
+            match fs::create_dir(&output_dir) {
+                Ok(_) => (),
+                Err(e) => {
+                    return Err(Box::new(TransformedError {
+                        msg: String::from("Unable to create output directory."),
+                        kind: ErrorKind::IOError,
+                        source: Some(Box::new(e)),
+                    }));
+                }
+            }
+
             let vhdl_result = synth_vhdl_chip(output_dir, path);
             if vhdl_result.is_err() {
                 let synth_result = synth_vhdl_test(output_dir, path);
@@ -132,16 +135,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let hdl = parser.parse()?;
 
-            let base_path = String::from(
-                hdl.path
-                    .as_ref()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
-            );
-            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
+            let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
             let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
             let mut simulator = Simulator::new(chip);
 

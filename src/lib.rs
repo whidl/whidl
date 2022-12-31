@@ -220,19 +220,15 @@ mod libtest {
     #[test]
     fn test_nand2tetris_solution_and() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
+        let base_path = manifest_dir
                 .join("resources")
                 .join("tests")
                 .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+                .join("solutions");
         let provider = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("And.hdl").unwrap();
         let (_, table) =
-            full_table_internal(&contents, Rc::new(FileReader::new(&base_path))).unwrap();
+            full_table_internal(&contents, provider).unwrap();
         assert_eq!(table.len(), 4);
     }
 }

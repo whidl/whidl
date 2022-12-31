@@ -8,10 +8,10 @@ use std::path::PathBuf;
 ///
 #[derive(Clone)]
 pub struct TestScript {
-    pub path: Option<PathBuf>,
-    pub hdl_file: PathBuf,
-    pub output_file: PathBuf,
-    pub compare_file: PathBuf,
+    pub test_path: PathBuf,
+    pub hdl_path: PathBuf,
+    pub output_path: PathBuf,
+    pub cmp_path: PathBuf,
     pub output_list: Vec<OutputFormat>,
     pub steps: Vec<Step>,
     pub generics: Vec<usize>,
@@ -124,15 +124,19 @@ impl<'a, 'b> TestParser<'a, 'b> {
 
         let generics = self.generics()?;
 
-        let hdl_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        // Use the full path to the HDL file, not relative to test script.
+        let test_path = self.scanner.path.clone();
+        let hdl_path = test_path.parent().unwrap().join(PathBuf::from(
+            self.consume(TokenType::Identifier).unwrap().lexeme,
+        ));
         self.consume(TokenType::Comma)?;
 
         self.consume(TokenType::OutputFile)?;
-        let output_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        let output_path = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
         self.consume(TokenType::Comma)?;
 
         self.consume(TokenType::CompareTo)?;
-        let compare_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        let cmp_path = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
         self.consume(TokenType::Comma)?;
 
         let output_list = self.output_list()?;
@@ -142,10 +146,10 @@ impl<'a, 'b> TestParser<'a, 'b> {
         // match in ports (can out ports come before in ports?)
         // match out ports
         Ok(TestScript {
-            path: Some(self.scanner.path.clone()),
-            hdl_file,
-            compare_file,
-            output_file,
+            test_path,
+            hdl_path,
+            cmp_path,
+            output_path,
             output_list,
             steps,
             generics,
