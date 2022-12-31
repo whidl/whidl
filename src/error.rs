@@ -17,11 +17,15 @@ pub enum ErrorKind {
     NonNumeric,
 }
 
+/// N2VError should be used when generating an error that has no other
+/// source error object. This is the start of the error propagation chain.
 pub struct N2VError {
     pub msg: String,
     pub kind: ErrorKind,
 }
 
+/// Transformed errors should be used when the source of the error is
+/// another error. This is propagating an error with a new message.
 pub struct TransformedError {
     pub msg: String,
     pub kind: ErrorKind,
@@ -40,6 +44,8 @@ impl std::fmt::Debug for TransformedError {
     }
 }
 
+/// This relies on the N2VError display implementation. It will print
+/// the entire error chain.
 impl std::fmt::Display for TransformedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.source.is_some() {
@@ -48,6 +54,17 @@ impl std::fmt::Display for TransformedError {
             write!(f, "{}", error_source)
         } else {
             write!(f, "{}", N2VError::from(self))
+        }
+    }
+}
+
+/// Strips the source from a transformed error. This is used to
+/// display a TransformedError.
+impl From<&TransformedError> for N2VError {
+    fn from(e: &TransformedError) -> Self {
+        N2VError {
+            msg: e.msg.clone(),
+            kind: e.kind.clone(),
         }
     }
 }
@@ -141,15 +158,6 @@ impl From<String> for N2VError {
     }
 }
 
-impl From<&TransformedError> for N2VError {
-    fn from(e: &TransformedError) -> Self {
-        N2VError {
-            msg: e.msg.clone(),
-            kind: e.kind.clone(),
-        }
-    }
-}
-
 impl Error for N2VError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
@@ -160,6 +168,12 @@ impl Error for TransformedError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.source {
             None => None,
+            // We store the source as an Box to a trait object.
+            // Dereference once to get the Box behind the self reference,
+            // and dereference the second time to get the inner trait object.
+            // We then return a reference to that inner trait object.
+            // This will be static lieftime because we return boxed dyn errors
+            // as our result error type everywhere.
             Some(e) => Some(&**e),
         }
     }
