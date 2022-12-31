@@ -76,7 +76,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
         Some(x) => x,
     };
 
-    let test_bench_path = output_dir.join(test_script_filename).with_extension("vhdl");
+    let test_bench_path = output_dir.join(test_script_filename).with_extension("tst.vhdl");
     fs::create_dir(&test_bench_path.parent().unwrap())?;
     let mut testbench_file = match File::create(&test_bench_path) {
         Err(e) => {
