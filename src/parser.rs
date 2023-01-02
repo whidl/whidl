@@ -14,10 +14,10 @@ use std::rc::Rc;
 pub enum Part {
     Component(Component),
     Loop(Loop),
+    AssignmentHDL(AssignmentHDL),
 }
 
 /// The Parse Tree for an HDL Chip.
-///
 #[derive(Clone)]
 pub struct ChipHDL {
     pub name: String,
@@ -147,6 +147,13 @@ pub struct Loop {
     pub body: Vec<Component>, // Prevent nested loops.
 }
 
+#[derive(Clone)]
+/// Designates two wire names. The signal from the right wire will be assigned to the left.
+pub struct AssignmentHDL {
+    pub left: BusHDL,
+    pub right: BusHDL,
+}
+
 #[derive(Serialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BusHDL {
     pub name: String,
@@ -192,7 +199,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             generic_decls: Vec::new(),
         });
     } else if name.to_lowercase() == "dff" {
-        // Hard-coded NAND chip
+        // Hard-coded DFF chip
         return Ok(ChipHDL {
             name: String::from("DFF"),
             ports: vec![
@@ -297,10 +304,12 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn generics(&mut self) -> Result<Vec<GenericWidth>, Box<dyn Error>> {
         let mut res: Vec<GenericWidth> = Vec::new();
 
-        if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {
+        if self.scanner.peek().unwrap().token_type != TokenType::Number
+            && self.scanner.peek().unwrap().token_type != TokenType::Identifier
+        {
             return Ok(Vec::new());
         }
-        self.consume(TokenType::LeftAngle)?;
+        //self.consume(TokenType::LeftAngle)?;
 
         loop {
             let next = self.scanner.next();
@@ -486,7 +495,6 @@ impl<'a, 'b> Parser<'a, 'b> {
     // Parses a list of components (parts). This list may contain for-generate loops.
     fn parts(&mut self) -> Result<Vec<Part>, Box<dyn Error>> {
         let mut parts: Vec<Part> = Vec::new();
-
         loop {
             let peeked = self.scanner.peek();
             match &peeked {
@@ -494,7 +502,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     token_type: TokenType::Identifier,
                     ..
                 }) => {
-                    parts.push(Part::Component(self.component()?));
+                    parts.push(self.component()?);
                 }
                 Some(Token {
                     token_type: TokenType::For,
@@ -546,7 +554,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                     token_type: TokenType::Identifier,
                     ..
                 }) => {
-                    parts.push(self.component()?);
+                    // Destructure the Part recieved from component
+                    if let Part::Component(comp) = self.component()? {
+                        parts.push(comp);
+                    }
                 }
                 Some(Token {
                     token_type: TokenType::RightCurly,
@@ -640,12 +651,61 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(width)
     }
 
-    fn component(&mut self) -> Result<Component, Box<dyn Error>> {
-        Ok(Component {
-            name: Identifier::from(self.scanner.next().unwrap()),
+    /// Extracts a component from HDL
+    fn component(&mut self) -> Result<Part, Box<dyn Error>> {
+        // Turn this
+        let ident = self.scanner.next().unwrap();
+        let ident_bus_widths = self.bus_idx()?;
+
+        let peeked = self
+            .scanner
+            .peek()
+            .expect("Expected an angle bracket or paren after an identifier.");
+        if let Token {
+            token_type: TokenType::LeftAngle,
+            ..
+        } = peeked
+        {
+            self.consume(TokenType::LeftAngle)?;
+
+            let peeked1 = self
+                .scanner
+                .peek()
+                .expect("Expected and equals sign or a generic declaration");
+            if let Token {
+                token_type: TokenType::Equal,
+                ..
+            } = peeked1
+            {
+                self.consume(TokenType::Equal)?;
+                let wire_ident = self.scanner.peek().unwrap();
+                self.consume(TokenType::Identifier)?;
+                let wire_ident_bus_widths = self.bus_idx()?;
+
+                // wire_ident if the rhs, ident is the left-hand side
+                let assign = AssignmentHDL {
+                    left: BusHDL {
+                        name: ident.lexeme.clone(),
+                        start: ident_bus_widths.0,
+                        end: ident_bus_widths.1,
+                    },
+                    right: BusHDL {
+                        name: wire_ident.lexeme.clone(),
+                        start: wire_ident_bus_widths.0,
+                        end: wire_ident_bus_widths.1,
+                    },
+                };
+
+                self.consume(TokenType::Semicolon)?;
+                return Ok(Part::AssignmentHDL(assign));
+            }
+        }
+
+        return Ok(Part::Component(Component {
+            name: Identifier::from(ident),
             generic_params: self.generics()?,
             mappings: self.port_mappings()?,
-        })
+        }));
     }
 
     fn port_width(&mut self) -> Result<GenericWidth, Box<dyn Error>> {
@@ -848,6 +908,17 @@ mod test {
     #[test]
     fn test_nand2tetris_solution_alu() {
         let path = PathBuf::from("nand2tetris/solutions/ALU.hdl");
+        let contents = read_hdl(&path);
+        let mut scanner = Scanner::new(contents.as_str(), path);
+        let mut parser = Parser {
+            scanner: &mut scanner,
+        };
+        parser.parse().expect("Parse error");
+    }
+
+    #[test]
+    fn test_buffer() {
+        let path = PathBuf::from("buffer/Buffer.hdl");
         let contents = read_hdl(&path);
         let mut scanner = Scanner::new(contents.as_str(), path);
         let mut parser = Parser {

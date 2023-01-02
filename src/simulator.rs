@@ -1,3 +1,4 @@
+use std::arch::x86_64::_mm_floor_ps;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -35,6 +36,8 @@ pub struct Bus {
 }
 
 #[derive(Hash, Eq, PartialEq)]
+/// Stores the results of a chip for a given set a of inputs.
+/// Used to avoid recalculating the same results over and over again.
 pub struct InputCacheEntry {
     name: String,
     signals: BusMap,
@@ -140,6 +143,12 @@ pub struct Port {
     pub direction: PortDirection,
 }
 
+pub struct Assignment {
+    pub left: Bus,
+    pub right: Bus,
+    pub width: usize,
+}
+
 // A chip constructed from parsed HDL.
 pub struct Chip {
     pub name: String,
@@ -164,6 +173,7 @@ pub struct Chip {
 
     // Values of variables (generics and iterators)
     variables: HashMap<String, usize>,
+    assignments: Vec<Assignment>,
 }
 
 impl fmt::Debug for Chip {
@@ -235,12 +245,22 @@ impl Chip {
 
         // Create component definitions (expand for-generate loops).
         let components = Self::generate_components(hdl, generics)?;
+        let assignments = gather_assignments(&hdl.parts);
 
         let general_generics: Vec<GenericWidth> = generics
             .iter()
             .map(|x| GenericWidth::Terminal(Terminal::Num(*x)))
             .collect();
-        let inferred_widths = infer_widths(hdl, &components, hdl_provider, &general_generics)?;
+        let inferred_widths = infer_widths(
+            hdl,
+            &assignments,
+            &components,
+            hdl_provider,
+            &general_generics,
+        )?;
+
+        let generated_assignments =
+            Self::generate_assignments(&inferred_widths, assignments, &variables)?;
 
         // Create disconnected internal signals.
         // These are connected below.
@@ -302,6 +322,7 @@ impl Chip {
             hdl_provider: Rc::clone(hdl_provider),
             variables,
             components,
+            assignments: generated_assignments,
         };
 
         if elaborate {
@@ -374,6 +395,7 @@ impl Chip {
                         }
                     }
                 }
+                Part::AssignmentHDL(_a) => {} // ignore assignments for now
             }
         }
 
@@ -413,6 +435,34 @@ impl Chip {
 
         let mut need_true_literal = false;
         let mut need_false_literal = false;
+
+        // Insert signal sources for every assignment.
+        for a in &self.assignments {
+            if &a.right.name == "true" {
+                need_true_literal = true;
+            }
+            if &a.right.name == "false" {
+                need_false_literal = true;
+            }
+            let port_chip = make_port_chip(
+                a.left.name.clone().as_str(),
+                a.width,
+                self_ptr,
+                &self.hdl_provider,
+            );
+            let assignment_port_node = self.circuit.add_node(port_chip);
+
+            let mut source = Vec::new();
+            for i in 0..a.width {
+                let source_bus = Bus {
+                    name: String::from("in"),
+                    range: Some(i..i + 1),
+                };
+                source.push(Some((assignment_port_node, source_bus)));
+            }
+
+            signal_sources.insert(a.left.name.clone(), source);
+        }
 
         // Create components and handle out ports from components into signals
         // indices of created_components needs to match order of parts
@@ -652,6 +702,40 @@ impl Chip {
             }
         };
 
+        // Add edges for assignments
+        for a in &self.assignments {
+            for j in 0..a.width {
+                let (source_node, source_bus) = match get_signal_source(
+                    a.right.name.as_str(),
+                    j,
+                    &Identifier::from(a.right.name.as_str()),
+                )? {
+                    Some(x) => x,
+                    None => {
+                        continue;
+                    }
+                };
+                let (target_node, _target_bus) = match get_signal_source(
+                    a.left.name.as_str(),
+                    j,
+                    &Identifier::from(a.left.name.as_str()),
+                )? {
+                    Some(x) => x,
+                    None => {
+                        continue;
+                    }
+                };
+                let wire = Wire {
+                    source: source_bus.clone(),
+                    target: Bus {
+                        name: String::from("in"),
+                        range: Some(j..j + 1),
+                    },
+                };
+                self.circuit.add_edge(*source_node, *target_node, wire);
+            }
+        }
+
         for (part_idx, part) in self.components.iter().enumerate() {
             let part_hdl = get_hdl(&part.name.value, &self.hdl_provider)?;
 
@@ -847,6 +931,37 @@ impl Chip {
         }
     }
 
+    /// Turns a list of AssignmentHDL into Assignments for easier computation
+    fn generate_assignments(
+        inferred_widths: &HashMap<String, GenericWidth>,
+        assignments: Vec<AssignmentHDL>,
+        generic_state: &HashMap<String, usize>,
+    ) -> Result<Vec<Assignment>, Box<dyn Error>> {
+        let mut converted_assignments = Vec::<Assignment>::new();
+        for a in assignments {
+            // This could possibly return None--add dummy width to infer_widths
+            let w = inferred_widths.get(&a.left.name).unwrap();
+            let usize_w = eval_expr_numeric(w, &generic_state)?;
+            let left_bus = Bus {
+                name: a.left.name,
+                range: Some(0..usize_w),
+            };
+            let right_bus = Bus {
+                name: a.right.name,
+                range: Some(0..usize_w),
+            };
+
+            // Create a Bus for left and right
+            let new_assignment = Assignment {
+                left: left_bus,
+                right: right_bus,
+                width: usize_w,
+            };
+            converted_assignments.push(new_assignment);
+        }
+        Ok(converted_assignments)
+    }
+
     fn compute(
         &mut self,
         input_cache: &mut Cache,
@@ -856,6 +971,7 @@ impl Chip {
             self.dirty = false;
 
             if self.name.to_uppercase() == "NAND" {
+                // Why not use get_name here?
                 let a = self.signals.get_bus(&Bus::from("a"))[0];
                 let b = self.signals.get_bus(&Bus::from("b"))[0];
                 let new_value = vec![nand(a, b)];
@@ -881,6 +997,10 @@ impl Chip {
                     parent_chip.cache = false;
                     parent = parent_chip.parent;
                 }
+            } else if self.name.to_uppercase() == "BUFFER" {
+                let r = self.signals.get_name("in");
+                self.signals.insert_option(&Bus::from("out"), r);
+                return Ok(());
             }
 
             let cache_entry = InputCacheEntry {
@@ -1131,6 +1251,7 @@ fn make_literal_chip(
         hdl_provider: Rc::clone(hdl_provider),
         variables: HashMap::new(),
         components: Vec::new(),
+        assignments: Vec::new(),
     }
 }
 
@@ -1183,6 +1304,7 @@ fn make_nand_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip
         hdl_provider: Rc::clone(hdl_provider),
         variables: HashMap::new(),
         components: Vec::new(),
+        assignments: Vec::new(),
     }
 }
 
@@ -1213,6 +1335,7 @@ fn make_port_chip(
         hdl_provider: Rc::clone(hdl_provider),
         variables: HashMap::new(),
         components: Vec::new(),
+        assignments: Vec::new(),
     }
 }
 
@@ -1268,6 +1391,7 @@ fn make_dff_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip 
         hdl_provider: Rc::clone(hdl_provider),
         variables: HashMap::new(),
         components: Vec::new(),
+        assignments: Vec::new(),
     }
 }
 
@@ -1279,12 +1403,14 @@ fn make_dff_chip(parent: *mut Chip, hdl_provider: &Rc<dyn HdlProvider>) -> Chip 
 /// if no signal range is given and signal already has a width, verify that width matches.
 ///
 /// * `hdl` - HDL for the chip that the signals belong to
+/// * 'assignments' - Vector of assignments pulled from the parts of hdl
 /// * `components` - Components to use when inferring widths. May or may not be
 ///                  the same as HDL components due to loop expansion.
 /// * `provider` - Responsible for retrieving HDL
 /// * `generics` - Generic values for instantiating chip corresponding to HDL (not a subcomponent).
 pub fn infer_widths(
     hdl: &ChipHDL,
+    assignments: &Vec<AssignmentHDL>,
     components: &Vec<Component>,
     provider: &Rc<dyn HdlProvider>,
     generics: &Vec<GenericWidth>,
@@ -1309,10 +1435,12 @@ pub fn infer_widths(
     }
 
     let mut inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
-
-    // Go through twice to make sure that all of the inferred widths work
-    // with every mapping.
-    for _ in 0..2 {
+    for port in &hdl.ports {
+        inferred_widths.insert(port.name.value.clone(), eval_expr(&port.width, &variables));
+    }
+    let mut last_inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
+    loop {
+        last_inferred_widths = inferred_widths.clone();
         for part in components {
             let component_hdl = get_hdl(&part.name.value, provider)?;
             // Convert generics with vars to concrete generics for component.
@@ -1327,7 +1455,7 @@ pub fn infer_widths(
             // Do not create a component chip here because that will
             // trigger elaboration of the entire component tree.
             // We only need the ports, and ports cannot be created with
-            // for generate loops, so this is sufficient enough to get
+            // for  loops, so this is sufficient enough to get
             // the variables map for looking up port widths.
             let component_variables: HashMap<String, GenericWidth> = component_hdl
                 .generic_decls
@@ -1359,40 +1487,47 @@ pub fn infer_widths(
                     })?;
                 let port = &component_hdl.ports[port_idx];
 
+                // I need to make the port_width from the component match the wire
                 // Get the width of the port referred to in the mapping.
                 // This uses the component chip variables because the width of the port is defined inside the component
-                let port_width = eval_expr(&port.width, &component_variables);
+                let hdl_port_width = eval_expr(&port.width, &component_variables);
 
                 let wire_start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
                 let wire_end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
 
                 // Convert inclusive range in HDL to exclusive Range in Rust
-                let wire_range: Option<Range<GenericWidth>> = wire_start.map(|ws| Range {
+                let mp_wire_range: Option<Range<GenericWidth>> = wire_start.map(|ws| Range {
                     start: ws,
                     end: wire_end.unwrap() + GenericWidth::Terminal(Terminal::Num(1)),
                 });
                 let port_start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
                 let port_end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
                 // Convert inclusive range in HDL to exclusive Range in Rust
-                let port_range: Option<Range<GenericWidth>> = port_start.map(|ps| Range {
+                let mp_port_range: Option<Range<GenericWidth>> = port_start.map(|ps| Range {
                     start: ps,
                     end: port_end.unwrap() + GenericWidth::Terminal(Terminal::Num(1)),
                 });
 
-                match (&wire_range, &port_range, inferred_widths.get(&m.wire.name)) {
-                    // wire range none, port range none, width none => use port width
+                // To line up widths, use the extracted, port range, wire range from the mapping, and any width previously found
+                match (
+                    &mp_wire_range,
+                    &mp_port_range,
+                    inferred_widths.get(&m.wire.name),
+                ) {
+                    // wire range none, mapping port range none, previous inferred width none => use port width from component ports
                     (None, None, None) => {
-                        inferred_widths.insert(m.wire.name.clone(), port_width);
+                        inferred_widths.insert(m.wire.name.clone(), hdl_port_width);
                     }
 
                     // wire range none, port range none, width some => verify width = port width
                     (None, None, Some(w)) => {
-                        if w.is_numeric() && w != &port_width {
-                            return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.", 
-                                &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &port_width
+                        if w.is_numeric() && w != &hdl_port_width {
+                            return Err(Box::new(N2VError { msg: format!(
+                                "Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} which is {}.",
+                                &hdl.name, &component_hdl.name, &m.wire.name, w, &m.port.name, &hdl_port_width
                             ),
-                            kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
-                        }));
+                                                           kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
+                            }));
                         }
                     }
 
@@ -1416,10 +1551,10 @@ pub fn infer_widths(
                     (Some(wr), None, None) => {
                         if wr.end.is_numeric()
                             && wr.start.is_numeric()
-                            && (&wr.end - &wr.start) != port_width
+                            && (&wr.end - &wr.start) != hdl_port_width
                         {
                             return Err(Box::new(N2VError { msg: format!("Chip {} component {} inferred width of signal {} is {}, not equal to width of port {} width which is {}.",
-                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, port_width
+                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, hdl_port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         }));
@@ -1431,10 +1566,10 @@ pub fn infer_widths(
                     (Some(wr), None, Some(w)) => {
                         if wr.end.is_numeric()
                             && wr.start.is_numeric()
-                            && (&wr.end - &wr.start) != port_width
+                            && (&wr.end - &wr.start) != hdl_port_width
                         {
                             return Err(Box::new(N2VError { msg: format!("Chip `{}` component `{}` wire range of signal `{}` is {}, not equal port `{}` width, which is {}.",
-                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &port_width
+                                &hdl.name, &component_hdl.name, &m.wire.name, (&wr.end - &wr.start), &m.port.name, &hdl_port_width
                             ),
                             kind: ErrorKind::ParseIdentError(provider.clone(), m.wire_ident.clone()),
                         }));
@@ -1496,9 +1631,86 @@ pub fn infer_widths(
                 }
             }
         }
+        if inferred_widths == last_inferred_widths {
+            loop {
+                // This runs until fixpoint as well to deal with multiple layers of redirection
+                last_inferred_widths = inferred_widths.clone();
+                for a in assignments {
+                    let wl = inferred_widths.get(&a.left.name.clone());
+                    let wr = inferred_widths.get(&a.right.name.clone());
+
+                    match (wl, wr) {
+                        (Some(w), None) => {
+                            inferred_widths.insert(a.right.name.clone(), w.clone());
+                        }
+                        (None, Some(w)) => {
+                            inferred_widths.insert(a.left.name.clone(), w.clone());
+                        }
+                        (Some(w1), Some(w2)) => {
+                            if w1 != w2 {
+                                let wname = a.right.name.clone();
+                                return Err(Box::new(N2VError {
+                                    msg: format!(
+                                        "Signal widths of {} and {} are not equal.",
+                                        &a.left.name.clone(),
+                                        &a.right.name.clone(),
+                                    ),
+                                    kind: ErrorKind::ParseIdentError(
+                                        provider.clone(),
+                                        Identifier::from(wname.as_str()),
+                                    ),
+                                }));
+                            }
+                        }
+                        (None, None) => {}
+                    }
+                }
+                if inferred_widths == last_inferred_widths {
+                    break;
+                }
+            }
+            for a in assignments {
+                match (
+                    inferred_widths.get(&a.left.name.clone()),
+                    inferred_widths.get(&a.right.name.clone()),
+                ) {
+                    // If neither widths have a source, throw an error. This allows us to make assumptions about widths later on.
+                    (None, None) => {
+                        return Err(Box::new(N2VError {
+                            msg: format!(
+                                "Signals {} and {} have no source or destination.",
+                                &a.left.name.clone(),
+                                &a.right.name.clone(),
+                            ),
+                            kind: ErrorKind::ParseIdentError(
+                                provider.clone(),
+                                Identifier::from(a.right.name.clone().as_str()),
+                            ),
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+            break;
+        }
     }
 
     Ok(inferred_widths)
+}
+
+/// Consolidates all assignments within the vector of parts passed as argument.
+pub fn gather_assignments(parts: &Vec<Part>) -> Vec<AssignmentHDL> {
+    let mut assignment_vec = Vec::new();
+    for part in parts {
+        match part {
+            Part::AssignmentHDL(pa) => {
+                assignment_vec.push(pa.clone());
+            }
+            _ => {}
+        }
+    }
+
+    assignment_vec
 }
 
 fn nand(a: Option<bool>, b: Option<bool>) -> Option<bool> {
@@ -1545,6 +1757,54 @@ mod test {
     fn test_nand2tetris_solution_not() {
         let mut simulator = make_simulator("Not.hdl");
         let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer() {
+        let mut simulator = make_simulator("../../buffer/Buffer.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer2() {
+        let mut simulator = make_simulator("../../buffer/Buffer2.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer3() {
+        let mut simulator = make_simulator("../../buffer/BufferTest3.hdl");
+        let inputs = BusMap::try_from([("testin", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("testout")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer4() {
+        let mut simulator = make_simulator("../../buffer/Buffer4.hdl");
+        let inputs = BusMap::try_from([("in", false)]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer5() {
+        let mut simulator = make_simulator("../../buffer/Buffer5.hdl");
+        let inputs = BusMap::try_from([("in", vec![true, false])]).expect("Error creating inputs");
+        let outputs = simulator.simulate(&inputs).expect("simulation failure");
+        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true), Some(false)]);
+    }
+
+    #[test]
+    fn test_simulator_buffer_literal() {
+        let mut simulator = make_simulator("../../buffer/BufferLiterals.hdl");
+        let inputs = BusMap::try_from([("in", true)]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
         assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true)]);
     }

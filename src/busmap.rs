@@ -248,8 +248,7 @@ impl BusMap {
         Ok(())
     }
 
-    // Inserts bus values. Merges with existing values
-    // for bus. Overwrites wire numbers.
+    /// Inserts bus values and merges with existing value for bus. Overwrites wire numbers.
     pub fn insert_option(&mut self, bus: &Bus, values: Vec<Option<bool>>) {
         if !self.buses.contains_key(&bus.name) {
             panic!("Attempt to use a bus that has not been created yet.");
