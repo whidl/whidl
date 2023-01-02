@@ -4,7 +4,6 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::Write;
-use std::fs;
 use std::fs::File;
 use std::io::Write as OtherWrite;
 use std::path::Path;
@@ -14,6 +13,11 @@ use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::infer_widths;
+
+pub struct Signal {
+    name: String,
+    width: GenericWidth,
+}
 
 /// Creates a quartus prime project inside project_dir
 ///
@@ -449,24 +453,28 @@ fn keyw(name: &str) -> String {
 ///
 /// `signal_name`: The name of the signal to declare.
 /// `signal_width`: The width of the signal to declare.
-pub fn signal_declaration(
-    signal_name: &str,
-    signal_width: &GenericWidth,
-) -> Result<String, Box<dyn Error>> {
+pub fn signal_declaration(signal: &Signal) -> Result<String, Box<dyn Error>> {
     let mut vhdl: String = String::new();
 
-    write!(&mut vhdl, "signal {} ", keyw(signal_name))?;
-    if let GenericWidth::Terminal(Terminal::Num(1)) = signal_width {
+    write!(&mut vhdl, "signal {} ", keyw(&signal.name))?;
+    if let GenericWidth::Terminal(Terminal::Num(1)) = signal.width {
         write!(&mut vhdl, ": std_logic;")?;
     } else {
         write!(
             &mut vhdl,
             ": std_logic_vector({} downto 0);",
-            signal_width - &GenericWidth::Terminal(Terminal::Num(1))
+            &signal.width - &GenericWidth::Terminal(Terminal::Num(1))
         )?;
     }
 
     Ok(vhdl)
+}
+
+fn is_implicit_signal(hdl: &ChipHDL, signal_name: &str) {
+    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
+    if signal_name == "true" || signal_name == "false" || {
+
+    }
 }
 
 /// Synthesizes VHDL for a top-level chip and all of its components.
@@ -538,7 +546,6 @@ pub fn synth_vhdl(
 
     let components = generate_components(hdl)?;
     let inferred_widths = infer_widths(hdl, &components, provider, &Vec::new())?;
-    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
 
     let mut signals: HashSet<String> = HashSet::new();
 
@@ -573,17 +580,15 @@ pub fn synth_vhdl(
                 let mut redirected_ports: HashSet<String> = HashSet::new();
                 for mapping in c.mappings.iter() {
                     // Print the declaration for the signal required for this mapping.
-                    let signal_name = &mapping.wire.name;
-                    if signal_name != "true"
-                        && signal_name != "false"
-                        && !port_names.contains(&keyw(signal_name))
-                    {
-                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = signal_declaration(
-                            &mapping.wire.name,
-                            &eval_expr(wire_width, &component_variables),
-                        )?;
-                        signals.insert(sig);
+                    let signal_name = mapping.wire.name.clone();
+                    if !is_implicit_signal(&hdl, &signal_name) {
+                        let signal_width = inferred_widths.get(&signal_name).unwrap();
+                        let signal = Signal {
+                            name: signal_name,
+                            width: eval_expr(signal_width, &component_variables),
+                        };
+                        let signal_decl_vhdl = signal_declaration(&signal)?;
+                        signals.insert(signal_decl_vhdl);
                     }
 
                     let port_direction = &component_hdl.get_port(&mapping.port.name)?.direction;
@@ -596,25 +601,26 @@ pub fn synth_vhdl(
                             vhdl_port_name, port_range, wire_name, wire_range
                         ));
                     } else {
-                        let redirect_signal = format!("{}_{}", component_id, vhdl_port_name);
+                        let redirect_signal_name = format!("{}_{}", component_id, vhdl_port_name);
                         if redirected_ports.get(&vhdl_port_name).is_none() {
                             redirected_ports.insert(vhdl_port_name.clone());
                             port_map.push(format!(
                                 "{}{} => {}{}",
-                                vhdl_port_name, port_range, redirect_signal, wire_range
+                                vhdl_port_name, port_range, redirect_signal_name, wire_range
                             ));
                         }
                         writeln!(
                             &mut arch_vhdl,
                             "{}{} <= {}{};",
-                            wire_name, wire_range, redirect_signal, wire_range
+                            wire_name, wire_range, redirect_signal_name, wire_range
                         )?;
 
-                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = signal_declaration(
-                            &redirect_signal,
-                            &eval_expr(wire_width, &component_variables),
-                        )?;
+                        let redirect_signal_width =
+                            inferred_widths.get(&mapping.wire.name).unwrap();
+                        let sig = signal_declaration(&Signal {
+                            name: redirect_signal_name,
+                            width: eval_expr(redirect_signal_width, &component_variables),
+                        })?;
                         signals.insert(sig);
                     }
                 }
@@ -666,16 +672,16 @@ pub fn synth_vhdl(
                         let mut redirected_ports: HashSet<String> = HashSet::new();
                         for mapping in c.mappings.iter() {
                             // Print the declaration for the signal required for this mapping.
-                            let signal_name = &mapping.wire.name;
-                            if signal_name != "true"
-                                && signal_name != "false"
-                                && !port_names.contains(&keyw(signal_name))
+                            let signal_width = inferred_widths.get(&mapping.wire.name).unwrap();
+                            let signal = Signal {
+                                name: mapping.wire.name.clone(),
+                                width: eval_expr(signal_width, &component_variables),
+                            };
+                            if signal.name != "true"
+                                && signal.name != "false"
+                                && !port_names.contains(&keyw(&signal.name))
                             {
-                                let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = signal_declaration(
-                                    &mapping.wire.name,
-                                    &eval_expr(wire_width, &component_variables),
-                                )?;
+                                let sig = signal_declaration(&signal)?;
                                 signals.insert(sig);
                             }
 
@@ -708,10 +714,10 @@ pub fn synth_vhdl(
                                 .unwrap();
 
                                 let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = signal_declaration(
-                                    &redirect_signal,
-                                    &eval_expr(wire_width, &component_variables),
-                                )?;
+                                let sig = signal_declaration(&Signal {
+                                    name: redirect_signal,
+                                    width: eval_expr(wire_width, &component_variables),
+                                })?;
                                 signals.insert(sig);
                             } else {
                                 port_map.push(format!(
@@ -871,21 +877,14 @@ mod test {
     use crate::scanner::Scanner;
     use std::path::PathBuf;
     use tempfile::tempdir;
+    use std::fs;
 
     #[test]
     // Just tests that we get some VHDL out.
     fn test_lightson_nocrash() {
-        let mut scanner: Scanner;
-        let source_code;
         let top_level_file = "resources/tests/de1-hdl/LightsOn.hdl";
-        let contents = fs::read_to_string(&top_level_file);
-        match contents {
-            Ok(sc) => {
-                source_code = sc;
-                scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-            }
-            Err(_) => panic!("Unable to read file."),
-        }
+        let source_code = fs::read_to_string(&top_level_file).expect("Unable tor ead file.");
+        let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
         let mut parser = Parser {
             scanner: &mut scanner,
         };
