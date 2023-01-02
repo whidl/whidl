@@ -1437,7 +1437,7 @@ pub fn infer_widths(
     for port in &hdl.ports {
         inferred_widths.insert(port.name.value.clone(), eval_expr(&port.width, &variables));
     }
-    let mut last_inferred_widths: HashMap<String, GenericWidth> = HashMap::new();
+    let mut last_inferred_widths;
     loop {
         last_inferred_widths = inferred_widths.clone();
         for part in components {
