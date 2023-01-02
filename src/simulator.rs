@@ -1,4 +1,3 @@
-use std::arch::x86_64::_mm_floor_ps;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -1798,7 +1797,10 @@ mod test {
         let mut simulator = make_simulator("../../buffer/Buffer5.hdl");
         let inputs = BusMap::try_from([("in", vec![true, false])]).expect("Error creating inputs");
         let outputs = simulator.simulate(&inputs).expect("simulation failure");
-        assert_eq!(outputs.get_bus(&Bus::from("out")), vec![Some(true), Some(false)]);
+        assert_eq!(
+            outputs.get_bus(&Bus::from("out")),
+            vec![Some(true), Some(false)]
+        );
     }
 
     #[test]
