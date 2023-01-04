@@ -3,6 +3,12 @@
 ![cargo build](https://github.com/whidl/whidl/actions/workflows/build.yml/badge.svg)
 ![cargo test](https://github.com/whidl/whidl/actions/workflows/test.yml/badge.svg)
 
+## Documentation
+
+In-progress documentation is at [whidl.github.io](https://whidl.github.io). The docs source is
+the `book` directory in this repository. The documentation can be read
+locally by using `mdbook serve`, or on GitHub codespaces `mdbook serve --hostname 0.0.0.0`. 
+
 ## Using whidl to synthesize ROMs for the CS 314 Toy ARM computer
 
 The `rom` subcommand can be used to synthesize ROM files for the Toy
