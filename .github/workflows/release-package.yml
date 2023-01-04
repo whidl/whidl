@@ -3,8 +3,8 @@ name: Node.js Package
 on:
   pull_request:
     branches: [ "main" ]
-    paths-ignore:
-      - 'docs/**'
+    paths:
+      - 'src/**'
     types:
       - closed
 
