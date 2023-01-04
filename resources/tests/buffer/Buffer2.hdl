@@ -1,0 +1,10 @@
+CHIP BTest2 {
+    IN testin;
+    OUT testout;
+
+    PARTS:
+     And(a=testin, b=true, out=andout);
+	 var <= orout;
+     Or(a=andout, b=false, out=orout);
+     testout <= var;
+}

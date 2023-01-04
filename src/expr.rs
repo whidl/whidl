@@ -273,6 +273,12 @@ pub fn eval_expr(expr: &GenericWidth, state: &HashMap<String, GenericWidth>) -> 
     res
 }
 
+// Returns true if a and b have the same variable name, ignoring
+// file name and file line.
+fn same_variable_name(a: &Identifier, b: &Identifier) -> bool {
+    a.value == b.value
+}
+
 fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
     // Constant compared with constant
     if let GenericWidth::Terminal(Terminal::Num(n1)) = t1 {
@@ -284,7 +290,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
     // N, N -> LHS (EQ)
     if let GenericWidth::Terminal(Terminal::Var(n1)) = &t1 {
         if let GenericWidth::Terminal(Terminal::Var(n2)) = &t2 {
-            if n1 == n2 {
+            if same_variable_name(n1, n2) {
                 return t1;
             }
         }
@@ -332,7 +338,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
         if let GenericWidth::Terminal(Terminal::Var(n1)) = &**rhs_lhs {
             if let GenericWidth::Terminal(Terminal::Num(_)) = &**rhs_rhs {
                 if let GenericWidth::Terminal(Terminal::Var(n2)) = &t1 {
-                    if n1 == n2 {
+                    if same_variable_name(n1, n2) {
                         return t1;
                     }
                 }
@@ -345,7 +351,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
         if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
             if let GenericWidth::Terminal(Terminal::Num(_)) = &**lhs_rhs {
                 if let GenericWidth::Terminal(Terminal::Var(n2)) = &t2 {
-                    if n1 == n2 {
+                    if same_variable_name(n1, n2) {
                         return t2;
                     }
                 }
@@ -358,7 +364,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
         if let GenericWidth::Terminal(Terminal::Var(n1)) = &**rhs_lhs {
             if let GenericWidth::Terminal(Terminal::Num(_)) = &**rhs_rhs {
                 if let GenericWidth::Terminal(Terminal::Var(n2)) = &t1 {
-                    if n1 == n2 {
+                    if same_variable_name(n1, n2) {
                         return t2;
                     }
                 }
@@ -371,7 +377,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
         if let GenericWidth::Terminal(Terminal::Var(n1)) = &**lhs_lhs {
             if let GenericWidth::Terminal(Terminal::Num(_)) = &**lhs_rhs {
                 if let GenericWidth::Terminal(Terminal::Var(n2)) = &t2 {
-                    if n1 == n2 {
+                    if same_variable_name(n1, n2) {
                         return t1;
                     }
                 }
@@ -385,7 +391,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
                 if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
                     if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
                         if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
-                            if n1 == n2 {
+                            if same_variable_name(n1, n2) {
                                 // N + C, N + D -> LHS if C = D and C == 0
                                 if c == &0 && d == &0 {
                                     return GenericWidth::Terminal(Terminal::Var(n1.clone()));
@@ -419,7 +425,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
                 if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
                     if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
                         if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
-                            if n1 == n2 {
+                            if same_variable_name(n1, n2) {
                                 // N - C, N + D -> EQ if C = D  and C = 0
                                 if c == &0 && d == &0 {
                                     return GenericWidth::Terminal(Terminal::Var(n1.clone()));
@@ -442,7 +448,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
                 if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
                     if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
                         if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
-                            if n1 == n2 {
+                            if same_variable_name(n1, n2) {
                                 // N + C, N - D -> LHS if C = D and C == 0
                                 if c == &0 && d == &0 {
                                     return GenericWidth::Terminal(Terminal::Var(n1.clone()));
@@ -465,7 +471,7 @@ fn eval_max(t1: GenericWidth, t2: GenericWidth) -> GenericWidth {
                 if let GenericWidth::Terminal(Terminal::Num(c)) = &**lhs_rhs {
                     if let GenericWidth::Terminal(Terminal::Var(n2)) = &**rhs_lhs {
                         if let GenericWidth::Terminal(Terminal::Num(d)) = &**rhs_rhs {
-                            if n1 == n2 {
+                            if same_variable_name(n1, n2) {
                                 // N - C, N - D -> LHS if C = D and C == 0
                                 if c == &0 && d == &0 {
                                     return GenericWidth::Terminal(Terminal::Var(n1.clone()));

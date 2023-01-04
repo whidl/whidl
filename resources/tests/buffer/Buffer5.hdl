@@ -1,0 +1,8 @@
+CHIP BTest5 {
+    IN in[2];
+    OUT out[2];
+
+    PARTS:
+    out[0] <= in[1];
+    out[1] <= in[0];
+}
