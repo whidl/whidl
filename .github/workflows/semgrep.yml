@@ -13,11 +13,13 @@ name: Semgrep
 on:
   push:
     branches: [ "main", releases/* ]
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ "main" ]
-  schedule:
-    - cron: '42 14 * * 4'
+    paths-ignore:
+      - 'docs/**'
 
 permissions:
   contents: read

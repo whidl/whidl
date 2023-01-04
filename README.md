@@ -6,7 +6,7 @@
 ## Documentation
 
 In-progress documentation is at [whidl.github.io](https://whidl.github.io). The docs source is
-the `book` directory in this repository. The documentation can be read
+the `docs` directory in this repository. The documentation can be read
 locally by using `mdbook serve`, or on GitHub codespaces `mdbook serve --hostname 0.0.0.0`. 
 
 ## Using whidl to synthesize ROMs for the CS 314 Toy ARM computer

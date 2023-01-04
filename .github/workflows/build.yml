@@ -3,8 +3,12 @@ name: cargo build
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     branches: [ "main", "releases/**" ]
+    paths-ignore:
+      - 'docs/**'
 
 env:
   CARGO_TERM_COLOR: always
