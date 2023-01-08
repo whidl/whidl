@@ -1,0 +1,40 @@
+# Assignment
+
+Sometimes you need to copy a variable to another variable. Instead of using the = sign for assignment like in, say Python, it uses <=. This is the same syntax that other hardware description languages use, and it indicates that you are *redirecting* a signal from a wire.  Practically, `x <= y` just copies the value in y to x.
+
+``` hdl
+// This is a dummy chip that always outputs true. 
+CHIP Dummy {
+    IN in;
+    OUT out;
+    PARTS:
+    
+    out <= true;
+}
+```
+
+
+You can also copy individual bits from a bus. You just need to specify what index or range of values you want to copy. The below example simply sets the 5th bit of the input to 1 and outputs the modified input.
+
+``` hdl
+CHIP AssignmentExample {
+    IN in[5];
+    OUT out[5];
+    PARTS:
+    
+    in[4] <= true;
+    out <= in;
+}
+
+```
+``` hdl
+CHIP AssignmentExample {
+    IN in[10];
+    OUT out[10];
+    PARTS:
+    
+    // You can also use a range of indices
+    in[5..9] <= true;
+    out <= in;
+}
+```
