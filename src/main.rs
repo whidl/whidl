@@ -85,9 +85,12 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let hdl = parser.parse()?;
     let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-    let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
+    let vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(provider);
+    let chip_vhdl = vhdl_synthesizer.synth_vhdl(&hdl)?;
+
     let quartus_dir = Path::new(&output_dir);
-    crate::vhdl::create_quartus_project(&hdl, entities, quartus_dir)?;
+    let quartus_project =
+        crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
 
     Ok(())
 }

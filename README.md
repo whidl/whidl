@@ -26,3 +26,9 @@ standard out.
 ### Version Changing
 
 - Make sure to change the version in `Cargo.toml` and `package.json.publish`.
+
+
+
+Synthesizing and running Modelsim tests on VHDL code from nand2tetris tests.
+
+
