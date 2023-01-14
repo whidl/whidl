@@ -7,7 +7,6 @@
 use crate::busmap::BusMap;
 use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
-use crate::scanner::Scanner;
 use crate::simulator::{Bus, Chip, Port, Simulator};
 use crate::test_parser::*;
 use crate::test_scanner::TestScanner;
