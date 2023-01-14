@@ -13,14 +13,13 @@ use std::rc::Rc;
 use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
-use crate::simulator::infer_widths;
+use crate::simulator::{gather_assignments, infer_widths};
 
 pub struct Signal {
     name: String,
     width: GenericWidth,
 }
 
-#[derive(PartialEq, Eq)]
 pub struct ChipVHDL {
     name: String,
     dependencies: HashSet<ChipVHDL>,
@@ -31,6 +30,13 @@ impl Hash for ChipVHDL {
         self.name.hash(state);
     }
 }
+
+impl PartialEq for ChipVHDL {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for ChipVHDL {}
 
 pub struct QuartusProject {
     chip_hdl: ChipHDL,
@@ -128,6 +134,7 @@ impl VhdlSynthesizer {
                         }
                     }
                 }
+                Part::AssignmentHDL(_) => {}
             }
         }
 
@@ -135,7 +142,13 @@ impl VhdlSynthesizer {
         let mut arch_vhdl: String = String::new();
 
         let components = generate_components(&self.hdl)?;
-        let inferred_widths = infer_widths(&self.hdl, &components, &self.provider, &Vec::new())?;
+        let inferred_widths = infer_widths(
+            &self.hdl,
+            &Vec::new(),
+            &components,
+            &self.provider,
+            &Vec::new(),
+        )?;
 
         let mut signals: HashSet<String> = HashSet::new();
 
@@ -144,6 +157,7 @@ impl VhdlSynthesizer {
                 Part::Component(c) => {}
 
                 Part::Loop(lp) => {}
+                Part::AssignmentHDL(_) => {}
             }
         }
 
@@ -826,6 +840,7 @@ fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
                     }
                 }
             }
+            Part::AssignmentHDL(_a) => {}
         }
     }
 
@@ -852,10 +867,11 @@ mod test {
         let hdl = parser.parse().expect("Parse error");
         let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-        let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl, provider);
-        let chip_vhdl = vhdl_synthesizer.synth_vhdl().expect("Failure synthesizing VHDL.");
+        let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl.clone(), provider);
+        let chip_vhdl = vhdl_synthesizer
+            .synth_vhdl()
+            .expect("Failure synthesizing VHDL.");
         let temp_dir = tempdir().expect("Unable to create temp directory for test.");
-        crate::vhdl::create_quartus_project(&hdl, chip_vhdl, temp_dir.path())
-            .expect("Unable to create project");
+        let _ = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, temp_dir.into_path());
     }
 }
