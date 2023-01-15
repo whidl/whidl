@@ -151,6 +151,7 @@ mod test {
         // 2. Run Modelsim and assert that all tests passed.
         let status = Command::new("vcom")
             .args(["-work", "work", "And.tst.vhdl"])
+            .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vcom");
 
