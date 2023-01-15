@@ -16,8 +16,8 @@ use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths};
 
 pub struct Signal {
-    name: String,
-    width: GenericWidth,
+    pub name: String,
+    pub width: GenericWidth,
 }
 
 pub struct ChipVHDL {

@@ -10,9 +10,11 @@ use std::path::Path;
 use bitvec::prelude::*;
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
+use crate::expr::GenericWidth;
 use crate::parser::parse_hdl_path;
 use crate::test_parser::TestScript;
 use crate::test_script::parse_test;
+use crate::vhdl::Signal;
 use crate::{Bus, PortMapping};
 
 /// This structure represents a Modelsim testbench.
@@ -73,7 +75,16 @@ impl fmt::Display for TestBench {
 
         // Signals. We need to declare inputs and outputs of chip that we are testing.
         for s in &self.signals {
-            // writeln!(f, "{}", crate::vhdl::signal_declaration(s))?;
+            let range = s.range.as_ref().ok_or(std::fmt::Error)?;
+            let sig = Signal {
+                name: s.name.clone(),
+                width: GenericWidth::from(range),
+            };
+
+            let signal_decl_vhdl =
+                crate::vhdl::signal_declaration(&sig).map_err(|_| std::fmt::Error)?;
+
+            writeln!(f, "{}", signal_decl_vhdl)?;
         }
 
         // === End Architecture ===
@@ -156,6 +167,6 @@ mod test {
             .status()
             .expect("Failed to execute vcom");
 
-       assert!(status.success()); 
+        assert!(status.success());
     }
 }
