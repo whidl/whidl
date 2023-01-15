@@ -57,7 +57,7 @@ impl fmt::Display for TestBench {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Libraries
         writeln!(f, "library ieee;")?;
-        writeln!(f, "ieee.std_logic_1164.all;")?;
+        writeln!(f, "use ieee.std_logic_1164.all;")?;
 
         // Entity declaration
         let entity_name = self.chip_name.clone() + "_test";
@@ -69,6 +69,7 @@ impl fmt::Display for TestBench {
         // === Begin Architecture ===
         writeln!(f)?;
         writeln!(f, "architecture test_arch of {} is", entity_name)?;
+        writeln!(f, "begin")?;
 
         // Signals. We need to declare inputs and outputs of chip that we are testing.
         for s in &self.signals {
@@ -150,7 +151,7 @@ mod test {
 
         // 2. Run Modelsim and assert that all tests passed.
         let status = Command::new("vcom")
-            .args(["-work", "work", "And.tst.vhdl"])
+            .args(["And.tst.vhdl"])
             .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vcom");
