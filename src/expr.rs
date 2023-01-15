@@ -30,7 +30,7 @@ impl GenericWidth {
 
 impl From<&Range<usize>> for GenericWidth {
     fn from(range: &Range<usize>) -> Self {
-        GenericWidth::Terminal(Terminal::Num(range.end - range.start))
+        GenericWidth::Terminal(Terminal::Num(1 + (range.end - range.start)))
     }
 }
 

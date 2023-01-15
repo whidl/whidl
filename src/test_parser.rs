@@ -1,8 +1,10 @@
-use crate::error::{ErrorKind, N2VError};
-use crate::test_scanner::{TestScanner, Token, TokenType};
-
 use std::error::Error;
+use std::ops::Range;
 use std::path::PathBuf;
+
+use crate::error::{ErrorKind, N2VError};
+use crate::simulator::Bus;
+use crate::test_scanner::{TestScanner, Token, TokenType};
 
 /// The Parse Tree for an HDL Chip.
 ///
@@ -48,6 +50,18 @@ pub struct OutputFormat {
     pub space_before: usize,
     pub output_columns: usize,
     pub space_after: usize,
+}
+
+impl From<&OutputFormat> for Bus {
+    fn from(o: &OutputFormat) -> Self {
+        Bus {
+            name: o.port_name.clone(),
+            range: Some(Range {
+                start: 0,
+                end: o.output_columns - 1,
+            }),
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]

@@ -12,7 +12,7 @@ use bitvec::prelude::*;
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::expr::GenericWidth;
 use crate::parser::parse_hdl_path;
-use crate::test_parser::TestScript;
+use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
 use crate::vhdl::Signal;
 use crate::{Bus, PortMapping};
@@ -22,11 +22,22 @@ pub struct TestBench {
     /// Name of chip being tested.
     chip_name: String,
     /// Signals required for inputs/outputs.
-    signals: Vec<Bus>,
+    signals: TestbenchSignals,
     /// Mapping of inputs and outputs from signals to chip ports.
     port_maps: Vec<PortMapping>,
     /// Individual steps to perform.
     instructions: Vec<Instruction>,
+}
+
+struct TestbenchSignals {
+    value: Vec<Bus>,
+}
+
+impl From<Vec<OutputFormat>> for TestbenchSignals {
+    fn from(output_list: Vec<OutputFormat>) -> Self {
+        let value = output_list.iter().map(|o| Bus::from(o)).collect();
+        TestbenchSignals { value }
+    }
 }
 
 /// An single action for the simulator to perform.
@@ -47,7 +58,7 @@ impl TryFrom<TestScript> for TestBench {
 
         Ok(TestBench {
             chip_name: hdl.name,
-            signals: Vec::new(),
+            signals: TestbenchSignals::from(test_script.output_list),
             port_maps: Vec::new(),
             instructions: Vec::new(),
         })
@@ -71,10 +82,9 @@ impl fmt::Display for TestBench {
         // === Begin Architecture ===
         writeln!(f)?;
         writeln!(f, "architecture test_arch of {} is", entity_name)?;
-        writeln!(f, "begin")?;
 
         // Signals. We need to declare inputs and outputs of chip that we are testing.
-        for s in &self.signals {
+        for s in &self.signals.value {
             let range = s.range.as_ref().ok_or(std::fmt::Error)?;
             let sig = Signal {
                 name: s.name.clone(),
@@ -86,6 +96,7 @@ impl fmt::Display for TestBench {
 
             writeln!(f, "{}", signal_decl_vhdl)?;
         }
+        writeln!(f, "begin")?;
 
         // === End Architecture ===
         writeln!(f, "end architecture test_arch;")?;
