@@ -131,6 +131,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
 mod test {
     use super::*;
     use std::path::PathBuf;
+    use std::process::Command;
     use tempfile::tempdir;
 
     #[test]
@@ -148,5 +149,11 @@ mod test {
         }
 
         // 2. Run Modelsim and assert that all tests passed.
+        let status = Command::new("vcom")
+            .args(["-work", "work", "And.tst.vhdl"])
+            .status()
+            .expect("Failed to execute vcom");
+
+       assert!(status.success()); 
     }
 }
