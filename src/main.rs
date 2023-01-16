@@ -80,12 +80,10 @@ enum Commands {
 fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     let source_code = fs::read_to_string(&hdl_path)?;
     let mut scanner = Scanner::new(&source_code, hdl_path.clone());
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = parser.parse()?;
-    let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+    let base_path = hdl_path.parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+    let mut parser = Parser::new(&mut scanner, provider.clone());
+    let hdl = parser.parse()?;
 
     let chip_vhdl : VhdlEntity = VhdlEntity::from(&hdl);
     let quartus_dir = Path::new(&output_dir);
@@ -132,14 +130,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Check { top_level_file } => {
             let source_code = fs::read_to_string(&top_level_file)?;
             let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-            let mut parser = Parser {
-                scanner: &mut scanner,
-            };
+            let base_path = scanner.path.parent().unwrap();
+            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+            let mut parser = Parser::new(&mut scanner, provider.clone());
 
             let hdl = parser.parse()?;
 
-            let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
-            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
             let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
             let mut simulator = Simulator::new(chip);
 

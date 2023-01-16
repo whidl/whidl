@@ -25,6 +25,7 @@ pub struct ChipHDL {
     pub parts: Vec<Part>,
     pub path: Option<PathBuf>,
     pub generic_decls: Vec<Identifier>,
+    pub provider: Rc<dyn HdlProvider>,
 }
 
 impl std::fmt::Display for ChipHDL {
@@ -52,6 +53,7 @@ pub trait HdlProvider {
     fn get_path(&self, file_name: &str) -> PathBuf;
 }
 
+#[derive(Clone)]
 pub struct FileReader {
     base_path: PathBuf,
 }
@@ -176,9 +178,7 @@ pub fn parse_hdl_path(hdl_path: &Path) -> Result<(ChipHDL, FileReader), Box<dyn 
     let provider = FileReader::new(base_path);
     let contents = provider.get_hdl(hdl_file).unwrap();
     let mut scanner = Scanner::new(contents.as_str(), provider.get_path(hdl_file));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let mut parser = Parser::new(&mut scanner, Rc::new(provider.clone()));
     let hdl = parser.parse()?;
     Ok((hdl, provider))
 }
@@ -211,6 +211,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             parts: Vec::new(),
             path: None,
             generic_decls: Vec::new(),
+            provider: provider.clone()
         });
     } else if name.to_lowercase() == "dff" {
         // Hard-coded DFF chip
@@ -231,6 +232,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             parts: Vec::new(),
             path: None,
             generic_decls: Vec::new(),
+            provider: provider.clone(),
         });
     }
 
@@ -239,17 +241,23 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
 
     let contents = provider.get_hdl(path.to_str().unwrap())?;
     let mut scanner = Scanner::new(contents.as_str(), path);
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let mut parser = Parser::new(&mut scanner, provider.clone());
     parser.parse()
 }
 
 pub struct Parser<'a, 'b> {
     pub scanner: &'a mut Scanner<'b>,
+    provider: Rc<dyn HdlProvider>,
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
+    pub fn new(scanner: &'a mut Scanner<'b>, provider: Rc<dyn HdlProvider>) -> Parser<'a, 'b> {
+        Parser {
+            scanner,
+            provider
+        }
+    }
+
     pub fn parse(&mut self) -> Result<ChipHDL, Box<dyn Error>> {
         self.chip()
     }
@@ -312,6 +320,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             parts,
             path: Some(self.scanner.path.clone()),
             generic_decls: generics,
+            provider: self.provider.clone(),
         })
     }
 
@@ -868,10 +877,9 @@ mod test {
     fn test_nand2tetris_solution_mux() {
         let path = PathBuf::from("nand2tetris/solutions/Mux.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -879,10 +887,9 @@ mod test {
     fn test_nand2tetris_solution_not16() {
         let path = PathBuf::from("nand2tetris/solutions/Not16.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -890,10 +897,9 @@ mod test {
     fn test_nand2tetris_solution_and16() {
         let path = PathBuf::from("nand2tetris/solutions/And16.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -901,10 +907,9 @@ mod test {
     fn test_nand2tetris_solution_or8way() {
         let path = PathBuf::from("nand2tetris/solutions/Or8Way.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -912,10 +917,9 @@ mod test {
     fn test_nand2tetris_solution_not() {
         let path = PathBuf::from("nand2tetris/solutions/Not.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -923,10 +927,9 @@ mod test {
     fn test_nand2tetris_solution_alu() {
         let path = PathBuf::from("nand2tetris/solutions/ALU.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -934,10 +937,9 @@ mod test {
     fn test_buffer() {
         let path = PathBuf::from("buffer/Buffer.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -945,10 +947,9 @@ mod test {
     fn test_arm_muxgen() {
         let path = PathBuf::from("arm/MuxGen.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 }

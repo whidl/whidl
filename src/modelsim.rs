@@ -180,12 +180,10 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
 
     let source_code = fs::read_to_string(&test_script.hdl_path)?;
     let mut scanner = Scanner::new(&source_code, test_script.hdl_path.clone());
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = parser.parse()?;
-    let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+    let base_path = scanner.path.parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+    let mut parser = Parser::new(&mut scanner, provider);
+    let hdl = parser.parse()?;
     let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl.clone(), provider);
     let chip_vhdl = vhdl_synthesizer.synth_vhdl()?;
 
