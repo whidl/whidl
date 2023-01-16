@@ -699,12 +699,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                 // wire_ident if the rhs, ident is the left-hand side
                 let assign = AssignmentHDL {
                     left: BusHDL {
-                        name: ident.lexeme.clone(),
+                        name: ident.lexeme,
                         start: ident_bus_widths.0,
                         end: ident_bus_widths.1,
                     },
                     right: BusHDL {
-                        name: wire_ident.lexeme.clone(),
+                        name: wire_ident.lexeme,
                         start: wire_ident_bus_widths.0,
                         end: wire_ident_bus_widths.1,
                     },
@@ -715,11 +715,11 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         }
 
-        return Ok(Part::Component(Component {
+        Ok(Part::Component(Component {
             name: Identifier::from(ident),
             generic_params: self.generics()?,
             mappings: self.port_mappings()?,
-        }));
+        }))
     }
 
     fn port_width(&mut self) -> Result<GenericWidth, Box<dyn Error>> {

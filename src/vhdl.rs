@@ -7,13 +7,14 @@ use std::fmt::Write;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
-use crate::simulator::{gather_assignments, infer_widths};
+use crate::simulator::{gather_assignments, infer_widths, Bus};
 
 pub struct Signal {
     pub name: String,
@@ -37,6 +38,34 @@ impl PartialEq for ChipVHDL {
     }
 }
 impl Eq for ChipVHDL {}
+
+#[derive(Clone)]
+pub struct BusVHDL {
+    pub name: String,
+    pub range: Option<Range<usize>>,
+}
+
+impl std::fmt::Display for BusVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.range {
+            None => write!(f, "{}", &self.name),
+            Some(r) => write!(f, "{}({} downto {})", keyw(&self.name), r.start, r.end),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PortMappingVHDL {
+    pub wire_name: String,
+    pub port: BusVHDL,
+    pub wire: BusVHDL,
+}
+
+impl std::fmt::Display for PortMappingVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} <= {}", &self.port, &self.wire)
+    }
+}
 
 pub struct QuartusProject {
     chip_hdl: ChipHDL,
@@ -739,7 +768,7 @@ fn port_mapping(
 }
 
 // VHDL keywords that we can't use.
-fn keyw(name: &str) -> String {
+pub fn keyw(name: &str) -> String {
     match name.to_lowercase().as_str() {
         "in" => String::from("in_n2v"),
         "out" => String::from("out_n2v"),

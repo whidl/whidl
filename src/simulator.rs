@@ -940,7 +940,7 @@ impl Chip {
         for a in assignments {
             // This could possibly return None--add dummy width to infer_widths
             let w = inferred_widths.get(&a.left.name).unwrap();
-            let usize_w = eval_expr_numeric(w, &generic_state)?;
+            let usize_w = eval_expr_numeric(w, generic_state)?;
             let left_bus = Bus {
                 name: a.left.name,
                 range: Some(0..usize_w),

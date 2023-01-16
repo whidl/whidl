@@ -11,11 +11,11 @@ use bitvec::prelude::*;
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::expr::GenericWidth;
-use crate::parser::parse_hdl_path;
+use crate::parser::{parse_hdl_path};
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::Signal;
-use crate::{Bus, PortMapping};
+use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw};
+use crate::simulator::Bus;
 
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
@@ -23,8 +23,6 @@ pub struct TestBench {
     chip_name: String,
     /// Signals required for inputs/outputs.
     signals: TestbenchSignals,
-    /// Mapping of inputs and outputs from signals to chip ports.
-    port_maps: Vec<PortMapping>,
     /// Individual steps to perform.
     instructions: Vec<Instruction>,
 }
@@ -57,9 +55,8 @@ impl TryFrom<TestScript> for TestBench {
         let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
 
         Ok(TestBench {
-            chip_name: hdl.name,
+            chip_name: keyw(&hdl.name),
             signals: TestbenchSignals::from(test_script.output_list),
-            port_maps: Vec::new(),
             instructions: Vec::new(),
         })
     }
@@ -98,6 +95,35 @@ impl fmt::Display for TestBench {
         }
         writeln!(f, "begin")?;
 
+        // Instantiate the component to be tested.
+        // UUT : entity work.half_adder port map (
+        //    a => test_in_a, b => test_in_b, sum => test_out_sum, carry => test_out_carry
+        //);
+
+        // Convert list of signals into port mappings with port name
+        // matching signal name.
+        let port_mappings = self.signals.value.iter().map(|s| {
+            let port = BusVHDL {
+                name: keyw(&s.name.clone()),
+                range: None,
+            };
+            let wire = BusVHDL {
+                name: keyw(&s.name.clone()),
+                range: None,
+            };
+
+            PortMappingVHDL {
+                wire_name: self.chip_name.clone(),
+                port,
+                wire,
+            }
+        })
+        .map(|pm| format!("{}", pm))
+        .collect::<Vec<String>>()
+        .join(",");
+
+        writeln!(f, "TestComponent : entity {} port map ({});", self.chip_name, port_mappings)?;
+
         // === End Architecture ===
         writeln!(f, "end architecture test_arch;")?;
 
@@ -105,6 +131,8 @@ impl fmt::Display for TestBench {
         writeln!(f)
     }
 }
+
+
 
 /// Converts a nand2tetris test script file to a VHDL testbench to be run
 /// with Modelsim. This will convert the test script itself, and the
