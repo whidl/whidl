@@ -12,7 +12,6 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
@@ -79,7 +78,7 @@ impl From<&ChipHDL> for VhdlEntity {
             &chip_hdl,
             &Vec::new(),
             components,
-            &self.provider,
+            &chip_hdl.provider,
             &Vec::new(),
         )?;
 
@@ -147,6 +146,16 @@ impl From<&Component> for VhdlComponent {
             unit: component.name.value.clone(),
             generic_params: Vec::new(),
             port_mappings: Vec::new(),
+        }
+    }
+}
+
+impl From<&VhdlComponent> for Component {
+    fn from(vc: &VhdlComponent) -> Self {
+        Component {
+            name: Identifier::from(&vc.unit),
+            generic_params: vc.generic_params,
+            mappings: vc.port_mappings,
         }
     }
 }
