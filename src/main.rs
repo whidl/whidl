@@ -18,6 +18,7 @@ use modelsim::synth_vhdl_test;
 use parser::*;
 use simulator::{Bus, Chip, Simulator};
 use test_script::run_test;
+use vhdl::VhdlEntity;
 
 use clap::Parser as ArgParser;
 use clap::Subcommand;
@@ -85,9 +86,8 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let hdl = parser.parse()?;
     let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-    let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl.clone(), provider);
-    let chip_vhdl = vhdl_synthesizer.synth_vhdl()?;
 
+    let chip_vhdl : VhdlEntity = VhdlEntity::from(&hdl);
     let quartus_dir = Path::new(&output_dir);
     let _ =
         crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());

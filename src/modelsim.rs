@@ -3,19 +3,22 @@
 
 use std::error::Error;
 use std::fmt;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::rc::Rc;
 
 use bitvec::prelude::*;
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::expr::GenericWidth;
-use crate::parser::{parse_hdl_path};
+use crate::parser::{parse_hdl_path, HdlProvider, Parser, FileReader};
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
 use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw};
 use crate::simulator::Bus;
+use crate::scanner::Scanner;
 
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
@@ -31,8 +34,8 @@ struct TestbenchSignals {
     value: Vec<Bus>,
 }
 
-impl From<Vec<OutputFormat>> for TestbenchSignals {
-    fn from(output_list: Vec<OutputFormat>) -> Self {
+impl From<&Vec<OutputFormat>> for TestbenchSignals {
+    fn from(output_list: &Vec<OutputFormat>) -> Self {
         let value = output_list.iter().map(|o| Bus::from(o)).collect();
         TestbenchSignals { value }
     }
@@ -48,15 +51,15 @@ pub enum Instruction {
     Assert(String, BitVec<u16, Msb0>, String),
 }
 
-impl TryFrom<TestScript> for TestBench {
+impl TryFrom<&TestScript> for TestBench {
     type Error = Box<dyn Error>;
 
-    fn try_from(test_script: TestScript) -> Result<Self, Box<dyn Error>> {
+    fn try_from(test_script: &TestScript) -> Result<Self, Box<dyn Error>> {
         let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
 
         Ok(TestBench {
             chip_name: keyw(&hdl.name),
-            signals: TestbenchSignals::from(test_script.output_list),
+            signals: TestbenchSignals::from(&test_script.output_list),
             instructions: Vec::new(),
         })
     }
@@ -144,7 +147,7 @@ impl fmt::Display for TestBench {
 /// - `test_script_path`: Path to the test script to convert.
 pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(), Box<dyn Error>> {
     let test_script = parse_test(test_script_path)?;
-    let test_bench: TestBench = TestBench::try_from(test_script)?;
+    let test_bench: TestBench = TestBench::try_from(&test_script)?;
 
     let test_script_filename = match test_script_path.file_name() {
         None => {
@@ -174,6 +177,21 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     };
     let test_bench_vhdl = test_bench.to_string();
     testbench_file.write_all(test_bench_vhdl.as_bytes())?;
+
+    let source_code = fs::read_to_string(&test_script.hdl_path)?;
+    let mut scanner = Scanner::new(&source_code, test_script.hdl_path.clone());
+    let mut parser = Parser {
+        scanner: &mut scanner,
+    };
+    let hdl = parser.parse()?;
+    let base_path = hdl.path.as_ref().unwrap().parent().unwrap();
+    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+    let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl.clone(), provider);
+    let chip_vhdl = vhdl_synthesizer.synth_vhdl()?;
+
+    let quartus_dir = Path::new(&output_dir);
+    let _ =
+        crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
 
     Ok(())
 }
