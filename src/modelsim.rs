@@ -1,6 +1,15 @@
 //! This module is responsible for converting nand2tetris test scripts into
 //! Modelsim testbenches.
 
+use crate::error::{ErrorKind, N2VError, TransformedError};
+use crate::expr::GenericWidth;
+use crate::parser::{parse_hdl_path, HdlProvider, Parser, FileReader};
+use crate::test_parser::{OutputFormat, TestScript};
+use crate::test_script::parse_test;
+use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw, VhdlEntity};
+use crate::simulator::Bus;
+use crate::scanner::Scanner;
+
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -10,15 +19,6 @@ use std::path::Path;
 use std::rc::Rc;
 
 use bitvec::prelude::*;
-
-use crate::error::{ErrorKind, N2VError, TransformedError};
-use crate::expr::GenericWidth;
-use crate::parser::{parse_hdl_path, HdlProvider, Parser, FileReader};
-use crate::test_parser::{OutputFormat, TestScript};
-use crate::test_script::parse_test;
-use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw};
-use crate::simulator::Bus;
-use crate::scanner::Scanner;
 
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
@@ -91,10 +91,10 @@ impl fmt::Display for TestBench {
                 width: GenericWidth::from(range),
             };
 
-            let signal_decl_vhdl =
-                crate::vhdl::signal_declaration(&sig).map_err(|_| std::fmt::Error)?;
+            // let signal_decl_vhdl =
+            //     crate::vhdl::signal_declaration(&sig).map_err(|_| std::fmt::Error)?;
 
-            writeln!(f, "{}", signal_decl_vhdl)?;
+            // writeln!(f, "{}", signal_decl_vhdl)?;
         }
         writeln!(f, "begin")?;
 
@@ -184,8 +184,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let mut parser = Parser::new(&mut scanner, provider);
     let hdl = parser.parse()?;
-    let mut vhdl_synthesizer = crate::vhdl::VhdlSynthesizer::new(hdl.clone(), provider);
-    let chip_vhdl = vhdl_synthesizer.synth_vhdl()?;
+    let chip_vhdl = VhdlEntity::try_from(&hdl)?;
 
     let quartus_dir = Path::new(&output_dir);
     let _ =

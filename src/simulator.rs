@@ -1739,7 +1739,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl(file_name).unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path(file_name));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())
             .expect("Chip creation error");
@@ -2315,7 +2315,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("And16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("And16.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2340,7 +2340,7 @@ mod test {
       }";
 
         let mut scanner = Scanner::new(contents, provider.get_path("Blah.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2358,7 +2358,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Inc16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("Inc16.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2374,7 +2374,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssign.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_err());
@@ -2389,7 +2389,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssignOK.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssignOK.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_ok());
@@ -2403,7 +2403,7 @@ mod test {
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Disconnected.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
-        let mut parser = Parser::new(&mut scanner, provider);
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_err());
