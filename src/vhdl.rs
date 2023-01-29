@@ -16,15 +16,62 @@ use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
 
+/// A Pet is an object that we track by name.
+pub trait Pet<'a> {
+    fn name(&self) -> &'a str;
+}
+
+/// A container for pets.
+pub trait Cage<'a> {
+    fn contains_name(self, name: &str) -> bool
+    where
+        Self: IntoIterator + std::marker::Sized,
+        <Self as IntoIterator>::Item: Pet<'a>,
+    {
+        self.into_iter().any(|pet| pet.name() == name)
+    }
+}
+
+impl<'a> Cage<'a> for &Vec<VhdlPort> {}
+
+#[derive(Debug)]
 pub struct Signal {
     pub name: String,
     pub width: GenericWidth,
+}
+
+impl fmt::Display for Signal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} : ", self.name)?;
+        match self.width {
+            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
+                if port_width_num > 1 {
+                    write!(f, "std_logic_vector({} downto 0);", port_width_num - 1)
+                } else {
+                    write!(f, "std_logic;")
+                }
+            }
+            _ => {
+                let sub1 = GenericWidth::Expr(
+                    Op::Sub,
+                    Box::new(self.width.clone()),
+                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+                );
+                write!(
+                    f,
+                    "std_logic_vector({} downto 0);",
+                    eval_expr(&sub1, &HashMap::new())
+                )
+            }
+        }
+    }
 }
 
 pub struct VhdlEntity {
     name: String,
     generics: Vec<String>, // All generics have type positive.
     ports: Vec<VhdlPort>,
+    signals: Vec<Signal>,
     components: Vec<VhdlComponent>,
 }
 
@@ -43,21 +90,29 @@ impl Eq for VhdlEntity {}
 
 impl fmt::Display for VhdlEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "library ieee;")?;
+        writeln!(f, "use ieee.std_logic_1164.all;")?;
+        writeln!(f)?;
+
         // Final VHDL generated for the top-level chip.
         writeln!(f, "entity {} is", keyw(&self.name));
 
-        self.generics.iter().for_each(|g| {
-            writeln!(f, "{}", g);
+        self.generics.iter().for_each(|x| {
+            writeln!(f, "{}", x);
         });
 
-        self.ports.iter().for_each(|p| {
-            writeln!(f, "{}", p);
+        self.ports.iter().for_each(|x| {
+            writeln!(f, "{}", x);
         });
 
         writeln!(f, "end entity {};", keyw(&self.name));
         writeln!(f);
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name));
+
+        self.signals.iter().for_each(|x| {
+            writeln!(f, "signal {}", x);
+        });
 
         write!(f, "")
     }
@@ -88,6 +143,17 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &chip_hdl.provider,
             &Vec::new(),
         )?;
+
+        let ports_ref = &ports;
+
+        let signals = inferred_widths
+            .iter()
+            .filter(|(signal_name, _)| !ports_ref.contains_name(signal_name))
+            .map(|(signal_name, signal_width)| Signal {
+                name: signal_name.clone(),
+                width: signal_width.clone(),
+            })
+            .collect();
 
         // for part in chip_hdl.parts {
         //     match part {
@@ -131,9 +197,10 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
         Ok(VhdlEntity {
             name: chip_hdl.name.clone(),
-            components: vhdl_components,
             generics,
             ports,
+            signals,
+            components: vhdl_components,
         })
     }
 }
@@ -149,10 +216,10 @@ pub struct VhdlComponent {
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
         VhdlComponent {
-            label: String::from(""),
+            label: component.name.value.clone(),
             unit: component.name.value.clone(),
-            generic_params: Vec::new(),
-            port_mappings: Vec::new(),
+            generic_params: component.generic_params.clone(),
+            port_mappings: component.mappings.clone(),
         }
     }
 }
@@ -188,6 +255,12 @@ struct VhdlPort {
     pub direction: PortDirection,
 }
 
+impl<'a> Pet<'a> for &'a VhdlPort {
+    fn name(&self) -> &'a str {
+        &self.name
+    }
+}
+
 impl From<&GenericPort> for VhdlPort {
     fn from(port: &GenericPort) -> Self {
         VhdlPort {
@@ -200,20 +273,20 @@ impl From<&GenericPort> for VhdlPort {
 
 impl fmt::Display for VhdlPort {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} : ", keyw(&self.name));
+        write!(f, "{} : ", keyw(&self.name))?;
 
         if self.direction == PortDirection::In {
-            write!(f, "in ");
+            write!(f, "in ")?;
         } else {
-            write!(f, "out ");
+            write!(f, "out ")?;
         }
 
         match self.width {
             GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
                 if port_width_num > 1 {
-                    write!(f, "std_logic_vector({} downto 0)", port_width_num - 1);
+                    write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
                 } else {
-                    write!(f, "std_logic");
+                    write!(f, "std_logic")?;
                 }
             }
             _ => {
@@ -226,7 +299,7 @@ impl fmt::Display for VhdlPort {
                     f,
                     "std_logic_vector({} downto 0)",
                     eval_expr(&sub1, &HashMap::new())
-                );
+                )?;
             }
         };
 
@@ -312,8 +385,6 @@ impl QuartusProject {
 //         writeln!(&mut top_level_vhdl, "end architecture arch;").unwrap();
 
 //         let mut header_vhdl = String::new();
-//         writeln!(&mut header_vhdl, "library ieee;").unwrap();
-//         writeln!(&mut header_vhdl, "use ieee.std_logic_1164.all;").unwrap();
 //         writeln!(&mut header_vhdl).unwrap();
 //         top_level_vhdl = header_vhdl + &top_level_vhdl;
 

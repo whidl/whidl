@@ -129,7 +129,7 @@ pub struct GenericPort {
     pub direction: PortDirection,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Component {
     pub name: Identifier,
     pub mappings: Vec<PortMapping>,
@@ -159,7 +159,7 @@ pub struct BusHDL {
 }
 
 //  Not(in=sel, out=notSel); has two wires { name : "sel", port: "in" }, { name : "notSel", port: "out" }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PortMapping {
     pub wire_ident: Identifier,
     pub wire: BusHDL,
