@@ -46,15 +46,15 @@ enum Commands {
     /// The output is a TCL script for creating a Quartus Prime project
     /// using quartus_sh, or a testbench to run with Modelsim.
     SynthVHDL {
-        /// The synth-vhdl command creates a Quartus Prime project in
-        /// a new folder. This is the folder to create for the project.
-        #[clap(short, long, action)]
-        output_dir: PathBuf,
-
         /// Path to either a top-level HDL file or a .tst test script to
         /// convert from nand2tetris from to VHDL.
-        #[clap(short, long, action)]
+        #[clap(index = 1)]
         path: PathBuf,
+
+        /// The synth-vhdl command creates a Quartus Prime project in
+        /// a new folder. This is the folder to create for the project.
+        #[clap(index = 2)]
+        output_dir: PathBuf,
     },
 
     /// Parses chip and simulates a single input, for catching errors.
@@ -86,9 +86,9 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let hdl = parser.parse()?;
 
     let chip_vhdl : VhdlEntity = VhdlEntity::try_from(&hdl)?;
-    let quartus_dir = Path::new(&output_dir);
-    let _ =
-        crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    println!("{}", &chip_vhdl);
+    //let quartus_dir = Path::new(&output_dir);
+    //let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
 
     Ok(())
 }
