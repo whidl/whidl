@@ -109,9 +109,12 @@ impl fmt::Display for VhdlEntity {
         writeln!(f);
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name));
-
         self.signals.iter().for_each(|x| {
             writeln!(f, "signal {}", x);
+        });
+
+        self.components.iter().for_each(|x| {
+            writeln!(f, "{}", x);
         });
 
         write!(f, "")
@@ -210,16 +213,22 @@ pub struct VhdlComponent {
     label: String,
     unit: String,
     generic_params: Vec<GenericWidth>,
-    port_mappings: Vec<PortMapping>,
+    port_mappings: Vec<VhdlPortMapping>,
 }
 
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
+        let port_mappings: Vec<VhdlPortMapping> = component
+            .mappings
+            .iter()
+            .map(|x| VhdlPortMapping::from(x))
+            .collect();
+
         VhdlComponent {
             label: component.name.value.clone(),
             unit: component.name.value.clone(),
             generic_params: component.generic_params.clone(),
-            port_mappings: component.mappings.clone(),
+            port_mappings,
         }
     }
 }
@@ -229,23 +238,45 @@ impl From<&VhdlComponent> for Component {
         Component {
             name: Identifier::from(&vc.unit[..]),
             generic_params: vc.generic_params.clone(),
-            mappings: vc.port_mappings.clone(),
+            mappings: vc.port_mappings.iter().map(|x| PortMapping::from(&x)).collect()
         }
+    }
+}
+
+impl fmt::Display for VhdlComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mappings_vhdl: String = self
+            .port_mappings
+            .iter()
+            .map(|x| format!("{}", x))
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        writeln!(f, "{} port map({});", self.unit, mappings_vhdl)
     }
 }
 
 #[derive(Clone)]
 pub struct BusVHDL {
     pub name: String,
-    pub range: Option<Range<usize>>,
+    pub start: Option<GenericWidth>,
+    pub end: Option<GenericWidth>,
+}
+
+impl From<&BusHDL> for BusVHDL {
+    fn from(hdl: &BusHDL) -> Self {
+        BusVHDL {
+            name: hdl.name.clone(),
+            start: hdl.start.clone(),
+            end: hdl.end.clone(),
+        }
+    }
 }
 
 impl std::fmt::Display for BusVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.range {
-            None => write!(f, "{}", &self.name),
-            Some(r) => write!(f, "{}({} downto {})", keyw(&self.name), r.start, r.end),
-        }
+        write!(f, "{}", &self.name),
+        => write!(f, "{}({} downto {})", keyw(&self.name), r.start, r.end),
     }
 }
 
@@ -308,15 +339,36 @@ impl fmt::Display for VhdlPort {
 }
 
 #[derive(Clone)]
-pub struct PortMappingVHDL {
+pub struct VhdlPortMapping {
     pub wire_name: String,
     pub port: BusVHDL,
     pub wire: BusVHDL,
 }
 
-impl std::fmt::Display for PortMappingVHDL {
+impl std::fmt::Display for VhdlPortMapping {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} <= {}", &self.port, &self.wire)
+    }
+}
+
+impl From<&PortMapping> for VhdlPortMapping {
+    fn from(pm: &PortMapping) -> Self {
+        VhdlPortMapping {
+            wire_name: pm.wire.name.clone(),
+            port: BusVHDL::from(pm.port),
+            wire: BusVHDL::from(pm.wire),
+        }
+    }
+}
+
+impl From<&VhdlPortMapping> for PortMapping {
+    fn from(pm: &VhdlPortMapping) -> Self {
+        PortMapping {
+            wire_ident: Identifier::from(pm.wire.name.clone()),
+            wire_name: pm.wire.name.clone(),
+            port: BusHDL::from(pm.port),
+            wire: BusHDL::from(pm.wire),
+        }
     }
 }
 

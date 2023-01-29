@@ -6,7 +6,7 @@ use crate::expr::GenericWidth;
 use crate::parser::{parse_hdl_path, HdlProvider, Parser, FileReader};
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw, VhdlEntity};
+use crate::vhdl::{Signal, VhdlPortMapping, BusVHDL, keyw, VhdlEntity};
 use crate::simulator::Bus;
 use crate::scanner::Scanner;
 
@@ -108,14 +108,16 @@ impl fmt::Display for TestBench {
         let port_mappings = self.signals.value.iter().map(|s| {
             let port = BusVHDL {
                 name: keyw(&s.name.clone()),
-                range: None,
+                start: None,
+                end: None,
             };
             let wire = BusVHDL {
                 name: keyw(&s.name.clone()),
-                range: None,
+                start: None,
+                end: None,
             };
 
-            PortMappingVHDL {
+            VhdlPortMapping {
                 wire_name: self.chip_name.clone(),
                 port,
                 wire,
