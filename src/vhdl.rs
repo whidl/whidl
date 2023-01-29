@@ -77,6 +77,10 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             .map(|vc| Component::from(vc))
             .collect();
 
+        for port in &chip_hdl.ports {
+            ports.push(VhdlPort::from(port));
+        }
+
         let inferred_widths = infer_widths(
             &chip_hdl,
             &Vec::new(),
@@ -182,6 +186,16 @@ struct VhdlPort {
     pub name: String,
     pub width: GenericWidth,
     pub direction: PortDirection,
+}
+
+impl From<&GenericPort> for VhdlPort {
+    fn from(port: &GenericPort) -> Self {
+        VhdlPort {
+            name: port.name.value.clone(),
+            width: port.width.clone(),
+            direction: port.direction,
+        }
+    }
 }
 
 impl fmt::Display for VhdlPort {
