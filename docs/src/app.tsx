@@ -1,4 +1,5 @@
 import React from "react";
+import { Outlet, useOutletContext } from "react-router-dom";
 
 // Material UI
 import { ThemeProvider, createTheme } from "@mui/material/styles";
@@ -19,6 +20,13 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GlobalStyles from '@mui/material/GlobalStyles';
 import './index.css'
 
+// Contexts that the outlet child has access to.
+type OutletContext = {
+  slideShowContext: SlideShowContext,
+  extraButtonsContext: ExtraButtonsContext,
+}
+type SlideShowContext = [isSlideShow: boolean, setIsSlideShow: React.Dispatch<React.SetStateAction<boolean>>];
+type ExtraButtonsContext = [extraButtons: React.ReactNode[], setExtraButtons: React.Dispatch<React.SetStateAction<React.ReactNode[]>>];
 
 export default function App() {
 
@@ -116,10 +124,16 @@ export default function App() {
                     </Drawer>
                     <Box component="main" sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', mt: '64px', mb: '32px', ml: 4, mr: 4 }}>
                         <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: contentWidth }}>
+                            <Outlet context={outletContext} />
                         </Box>
                     </Box>
                 </Box>
             </ThemeProvider>
         </React.Fragment>
     )
+}
+
+// Function for the outlet child to gain access to the app context.
+export function useParentContext(): OutletContext {
+  return useOutletContext<OutletContext>();
 }
