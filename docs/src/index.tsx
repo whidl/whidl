@@ -9,6 +9,7 @@ import Assignment from "./pages/assignment.mdx";
 import Generics from "./pages/generics.mdx";
 import Loops from "./pages/loops.mdx";
 import Usage from "./pages/usage.mdx";
+import TruthTables from "./pages/truth-tables";
 
 ReactDOM.createRoot(document.querySelector("#root")!).render(
     <React.StrictMode>
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.querySelector("#root")!).render(
                         <Route path="generics" element={<Generics />} />
                         <Route path="loops" element={<Loops />} />
                         <Route path="usage" element={<Usage />} />
+                        <Route path="truth-tables" element={<TruthTables />} />
                     </Route>
                 </Routes>
             </BrowserRouter>
