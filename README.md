@@ -12,6 +12,12 @@ locally by using `mdbook serve`, or on GitHub codespaces `mdbook serve --hostnam
 The documentation at whidl.github.io/whidl is updated by any push to the `main`
 branch that changes files in `doc/**`.
 
+### Adding a documentation page
+
+1. Add the `.mdx` file to `docs/src`.
+2. Add a route in `index.tsx`.
+3. Add a Nav entry in `nav.tsx`.
+
 ## Using whidl to synthesize ROMs for the CS 314 Toy ARM computer
 
 The `rom` subcommand can be used to synthesize ROM files for the Toy

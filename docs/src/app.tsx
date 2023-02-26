@@ -20,10 +20,12 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GlobalStyles from '@mui/material/GlobalStyles';
 import './index.css'
 
+import Nav from './nav';
+
 // Contexts that the outlet child has access to.
 type OutletContext = {
-  slideShowContext: SlideShowContext,
-  extraButtonsContext: ExtraButtonsContext,
+    slideShowContext: SlideShowContext,
+    extraButtonsContext: ExtraButtonsContext,
 }
 type SlideShowContext = [isSlideShow: boolean, setIsSlideShow: React.Dispatch<React.SetStateAction<boolean>>];
 type ExtraButtonsContext = [extraButtons: React.ReactNode[], setExtraButtons: React.Dispatch<React.SetStateAction<React.ReactNode[]>>];
@@ -108,6 +110,7 @@ export default function App() {
                     </AppBar>
                     <Drawer variant="permanent" sx={{ width: 250, display: { xs: 'none', lg: 'block' } }} PaperProps={{ sx: { width: 250 } }}>
                         <Toolbar />
+                        <Nav />
                     </Drawer>
                     <Drawer
                         variant="temporary"
@@ -135,5 +138,5 @@ export default function App() {
 
 // Function for the outlet child to gain access to the app context.
 export function useParentContext(): OutletContext {
-  return useOutletContext<OutletContext>();
+    return useOutletContext<OutletContext>();
 }
