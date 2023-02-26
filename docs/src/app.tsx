@@ -17,6 +17,8 @@ import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 
 import GlobalStyles from '@mui/material/GlobalStyles';
+import './index.css'
+
 
 export default function App() {
 
@@ -75,8 +77,25 @@ export default function App() {
                     >
                         <Toolbar>
                             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                                WHiDL Documentation
+                                WHiDL Docs
                             </Typography>
+
+                            {
+                                // Buttons added by the outlet child
+                                outletContext.extraButtonsContext[0]
+                            }
+
+                            <IconButton
+                                sx={{ ml: 1 }}
+                                onClick={colorMode.toggleColorMode}
+                                color="inherit"
+                            >
+                                {theme.palette.mode === "dark" ? (
+                                    <Brightness7Icon />
+                                ) : (
+                                    <Brightness4Icon />
+                                )}
+                            </IconButton>
                         </Toolbar>
                     </AppBar>
                     <Drawer variant="permanent" sx={{ width: 250, display: { xs: 'none', lg: 'block' } }} PaperProps={{ sx: { width: 250 } }}>
@@ -91,8 +110,9 @@ export default function App() {
                         }}
                     >
                         <Typography variant="h6" sx={{ m: 2 }}>
-                            DeFreez Classes
+                            WHiDL Docs
                         </Typography>
+
                     </Drawer>
                     <Box component="main" sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', mt: '64px', mb: '32px', ml: 4, mr: 4 }}>
                         <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: contentWidth }}>
