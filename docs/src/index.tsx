@@ -1,6 +1,17 @@
 import React from 'react'
-import { createRoot } from 'react-dom/client'
+import ReactDOM from "react-dom/client";
+import { StyledEngineProvider } from "@mui/material/styles";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import App from "./app";
 
-const container = document.getElementById('root')!
-const root = createRoot(container)
-root.render(<h1>Hello React!</h1>)
+ReactDOM.createRoot(document.querySelector("#root")!).render(
+    <React.StrictMode>
+        <StyledEngineProvider injectFirst>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/" element={<App />}></Route>
+                </Routes>
+            </BrowserRouter>
+        </StyledEngineProvider>
+    </React.StrictMode>
+)
