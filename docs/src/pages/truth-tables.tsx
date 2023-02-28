@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Grid from "@mui/material/Grid";
 import init, { full_table } from "@whidl/whidl";
 import Alert, { AlertColor } from "@mui/material/Alert";
@@ -10,18 +10,29 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 
+import * as monaco from 'monaco-editor';
+import Editor from "@monaco-editor/react";
+
 let chips = {
-  And: `// Nand(a, b, out), And(a, b, out), Not(in, out), Or (a, b, out) are available to use as parts. Chip names are case sensitive.
-  // Only one chip can be created in this text field.
+  And: 
+  `/*
+Parts available for use: 
+  Nand(a, b, out)
+  And(a, b, out) 
+  Not(in, out)
+  Or (a, b, out)
+Chip names are case sensitive.
+Only one chip can be created in this text field.
+*/
 
-  CHIP And {
-    IN a, b;
-    OUT out;
+CHIP And {
+  IN a, b;
+  OUT out;
 
-    PARTS:
-    Nand(a=a, b=b, out=nandout);
-    Not(in=nandout, out=out);
-  }`,
+  PARTS:
+  Nand(a=a, b=b, out=nandout);
+  Not(in=nandout, out=out);
+}`,
 
   Not: `CHIP Not {
         IN in;
@@ -74,7 +85,16 @@ CHIP Mux4Way {
 };
 
 export default function TruthTableGenerator() {
+  // This is only created because a null reference throws an error
+  const editor_ref = useRef(monaco.editor.create(document.createElement("editor")));
+
+
   type option_bool = boolean | null;
+
+  function handleEditorMount(editor: any) {
+    editor_ref.current = editor;
+    editor_ref.current.updateOptions({minimap: {enabled: false}});
+  }
 
   function ob_str(v: option_bool) {
     if (v === true) {
@@ -97,7 +117,7 @@ export default function TruthTableGenerator() {
 
   useEffect(() => {
     init().then(() => {
-      let table_json = full_table(chips["Or"]);
+      let table_json = full_table(chips["And"]);
       let table: [Array<string>, Array<Array<Array<option_bool>>>] =
         JSON.parse(table_json);
       console.log(table);
@@ -107,7 +127,7 @@ export default function TruthTableGenerator() {
 
   function changeCode(s: any) {
     try {
-      let table_json = full_table(s.target.value);
+      let table_json = full_table(s);
       let table: [Array<string>, Array<Array<Array<option_bool>>>] =
         JSON.parse(table_json);
       setAns(table);
@@ -120,21 +140,20 @@ export default function TruthTableGenerator() {
   }
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={6}>
-        <TextField
-          name="Name"
-          id="name"
-          data-tid="avy"
-          onChange={(s) => changeCode(s)}
-          multiline
-          fullWidth
-          minRows={20}
-          spellCheck="false"
+    <Grid container spacing={{ xs: 2, md: 3}}>
+      <Grid item xs={6} sx={{
+        left:1
+      }}>
+        <Editor
+          height="70vh"
+          width="60vh"
+          theme="vs-dark"
+          onMount={handleEditorMount}
+          onChange={(s) => { changeCode(editor_ref.current.getValue()) }}
           defaultValue={chips["And"]}
         />
       </Grid>
-      <Grid item xs={6}>
+      <Grid item xs={6} spacing={3}>
         <TableContainer sx={{ maxHeight: 440 }}>
           <Table size="small" stickyHeader>
             <TableHead>

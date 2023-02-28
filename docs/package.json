@@ -27,12 +27,13 @@
     "@emotion/styled": "^11.10.6",
     "@fontsource/roboto": "^4.5.8",
     "@mdx-js/loader": "^2.3.0",
+    "@monaco-editor/react": "^4.4.6",
     "@mui/icons-material": "^5.11.9",
     "@mui/lab": "^5.0.0-alpha.120",
     "@mui/material": "^5.11.10",
+    "@whidl/whidl": "file:../pkg",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.8.1",
-    "@whidl/whidl": "file:../pkg"
+    "react-router-dom": "^6.8.1"
   }
 }
