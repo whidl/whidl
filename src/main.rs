@@ -88,7 +88,6 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let hdl = parser.parse()?;
 
     let chip_vhdl : VhdlEntity = VhdlEntity::try_from(&hdl)?;
-    println!("{}", &chip_vhdl);
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
     write_quartus_project(&project);
