@@ -133,7 +133,10 @@ impl<'a, 'b> TestParser<'a, 'b> {
     fn test_script(&mut self) -> Result<TestScript, Box<dyn Error>> {
         // Load cannot be a keyword because it is used as a port name.
         if self.consume(TokenType::Identifier).unwrap().lexeme != "load" {
-            panic!("Expected load.");
+            return Err(Box::new(N2VError {
+                msg: format!("Expected load"),
+                kind: ErrorKind::Other,
+            }));
         }
 
         let generics = self.generics()?;

@@ -68,7 +68,7 @@ impl fmt::Display for Signal {
 }
 
 pub struct VhdlEntity {
-    name: String,
+    pub name: String,
     generics: Vec<String>,
     ports: Vec<VhdlPort>,
     signals: Vec<Signal>,
@@ -95,29 +95,29 @@ impl fmt::Display for VhdlEntity {
         writeln!(f)?;
 
         // Final VHDL generated for the top-level chip.
-        writeln!(f, "entity {} is", keyw(&self.name));
+        writeln!(f, "entity {} is", keyw(&self.name))?;
 
         self.generics.iter().for_each(|x| {
-            writeln!(f, "{}", x);
+            writeln!(f, "{}", x).unwrap();
         });
 
         self.ports.iter().for_each(|x| {
-            writeln!(f, "{}", x);
+            writeln!(f, "{}", x).unwrap();
         });
 
-        writeln!(f, "end entity {};", keyw(&self.name));
-        writeln!(f);
+        writeln!(f, "end entity {};", keyw(&self.name))?;
+        writeln!(f)?;
 
-        writeln!(f, "architecture arch of {} is", keyw(&self.name));
-        writeln!(f, "begin");
+        writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
+        writeln!(f, "begin")?;
         self.signals.iter().for_each(|x| {
-            writeln!(f, "signal {}", x);
+            writeln!(f, "signal {}", x).unwrap();
         });
 
         self.components.iter().for_each(|x| {
-            writeln!(f, "{}", x);
+            writeln!(f, "{}", x).unwrap();
         });
-        writeln!(f, "end arch");
+        writeln!(f, "end arch")?;
 
         write!(f, "")
     }
@@ -405,9 +405,9 @@ impl From<&PortMappingVHDL> for PortMappingHDL {
 }
 
 pub struct QuartusProject {
-    chip_hdl: ChipHDL,
-    chip_vhdl: VhdlEntity,
-    project_dir: PathBuf,
+    pub chip_hdl: ChipHDL,
+    pub chip_vhdl: VhdlEntity,
+    pub project_dir: PathBuf,
 }
 
 impl QuartusProject {
@@ -811,9 +811,6 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
     )?;
 
     let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
-    let mut file = File::create(qp.project_dir.join(&chip_filename))?;
-    file.write_all(format!("{}", qp.chip_vhdl).as_bytes())?;
-
     writeln!(
         tcl,
         "set_global_assignment -name VHDL_FILE {}",

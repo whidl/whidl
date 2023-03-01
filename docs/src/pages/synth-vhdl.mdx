@@ -1,0 +1,44 @@
+# Synthesizing VHDL
+
+## WHiDL usage
+
+The WHiDL subcommand to synthesize VHDL from HDL is `synth-vhdl`.
+
+```
+whidl-synth-vhdl 
+Creates VHDL and Quartus TCL. This command can be used to convert an HDL file to VHDL, or a
+nand2tetris test into a Modelsim testbench. The output is a TCL script for creating a Quartus Prime
+project using quartus_sh, or a testbench to run with Modelsim
+
+USAGE:
+    whidl synth-vhdl <PATH> <OUTPUT_DIR>
+
+ARGS:
+    <PATH>          Path to either a top-level HDL file or a .tst test script to convert from
+                    nand2tetris from to VHDL
+    <OUTPUT_DIR>    The synth-vhdl command creates a Quartus Prime project in a new folder. This
+                    is the folder to create for the project
+
+OPTIONS:
+    -h, --help    Print help information
+```
+
+For example, from the 
+
+## Compiling VHDL with Quartus Prime
+
+WHiDL synthesizes and entire Quartus Prime project. If you are using
+the WHiDL codespace, then the free community edition of Quartus Prime will
+be preinstalled. From within the generated quartus prime project directory,
+the following commands can be used to compile the project.
+
+```
+quartus_sh -t project.tcl
+quartus_sh --flow compile $NAMEOFYOURCHIP
+```
+
+## Synthesizing Tests
+
+In addition to converting VHDL entities to HDL chips, WHiDL can also
+convert nand2tetris into Modelsim tests. This detection happens automatically.
+

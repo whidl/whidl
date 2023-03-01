@@ -25,13 +25,17 @@ use clap::Subcommand;
 use object::{Object, ObjectSection};
 use parser::Parser;
 use scanner::Scanner;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
 
 use crate::vhdl::write_quartus_project;
+
+use std::io::Write;
 
 #[derive(ArgParser)]
 #[clap(version)]
@@ -79,7 +83,9 @@ enum Commands {
     Decode { thumb_binary: String },
 }
 
+// TODO: Remove duplication from this function.
 fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    // Standard HDL parsing pipeline.
     let source_code = fs::read_to_string(hdl_path)?;
     let mut scanner = Scanner::new(&source_code, hdl_path.clone());
     let base_path = hdl_path.parent().unwrap();
@@ -87,10 +93,87 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let mut parser = Parser::new(&mut scanner, provider.clone());
     let hdl = parser.parse()?;
 
-    let chip_vhdl : VhdlEntity = VhdlEntity::try_from(&hdl)?;
+    // Convert HDL to VHDL (VHDl synthesis).
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&hdl)?;
+
+    // Create a Quartus Prime project.
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
-    write_quartus_project(&project);
+    write_quartus_project(&project)?;
+
+    // Write the already-parsed main chip.
+    let chip_filename = project.chip_vhdl.name.clone() + ".vhdl";
+    let mut file = File::create(quartus_dir.join(&chip_filename))?;
+    file.write_all(format!("{}", project.chip_vhdl).as_bytes())?;
+
+    // The chip names we have already processed. We only need to
+    // convert each chip type once.
+    let mut done: HashSet<String> = HashSet::new();
+    done.insert(String::from("Nand"));
+    done.insert(String::from("Dff"));
+
+    // Recursively parse and write all dependency components.
+    // Worklist is set of chip names that we need to convert from HDL to VHDL.
+    let mut worklist: Vec<String> = Vec::new();
+
+    // Seed the worklist with all components of the top-level entity.
+    for part in &project.chip_hdl.parts {
+        match part {
+            Part::Component(c) => {
+                if !done.contains(&c.name.value) {
+                    done.insert(c.name.value.clone());
+                    worklist.push(c.name.value.clone());
+                }
+            }
+            Part::Loop(l) => {
+                for c in &l.body {
+                    if !done.contains(&c.name.value) {
+                        done.insert(c.name.value.clone());
+                        worklist.push(c.name.value.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    while !worklist.is_empty() {
+        let next_chip_name = worklist.pop().unwrap();
+        println!("{}", next_chip_name);
+        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
+
+        let next_source_code = fs::read_to_string(&next_hdl_path)?;
+        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
+        let mut next_parser = Parser::new(&mut next_scanner, provider.clone());
+        let next_hdl = next_parser.parse()?;
+
+        // Convert HDL to VHDL (VHDl synthesis).
+        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
+
+        let next_filename = next_chip_name.clone() + ".vhdl";
+        let mut next_file = File::create(quartus_dir.join(&next_filename))?;
+        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
+
+        for part in &next_hdl.parts {
+            match part {
+                Part::Component(c) => {
+                    if !done.contains(&c.name.value) {
+                        done.insert(c.name.value.clone());
+                        worklist.push(c.name.value.clone());
+                    }
+                }
+                Part::Loop(l) => {
+                    for c in &l.body {
+                        if !done.contains(&c.name.value) {
+                            done.insert(c.name.value.clone());
+                            worklist.push(c.name.value.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        }
 
     Ok(())
 }
