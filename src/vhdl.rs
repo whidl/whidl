@@ -374,8 +374,8 @@ impl From<&PortMappingHDL> for PortMappingVHDL {
     fn from(pm: &PortMappingHDL) -> Self {
         PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
-            port: BusVHDL::from(pm.port),
-            wire: BusVHDL::from(pm.wire),
+            port: BusVHDL::from(&pm.port),
+            wire: BusVHDL::from(&pm.wire),
         }
     }
 }
