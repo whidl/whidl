@@ -132,7 +132,7 @@ pub struct GenericPort {
 #[derive(Clone, Debug)]
 pub struct Component {
     pub name: Identifier,
-    pub mappings: Vec<PortMapping>,
+    pub mappings: Vec<PortMappingHDL>,
     pub generic_params: Vec<GenericWidth>,
 }
 
@@ -160,7 +160,7 @@ pub struct BusHDL {
 
 //  Not(in=sel, out=notSel); has two wires { name : "sel", port: "in" }, { name : "notSel", port: "out" }
 #[derive(Clone, Debug)]
-pub struct PortMapping {
+pub struct PortMappingHDL {
     pub wire_ident: Identifier,
     pub wire: BusHDL,
     pub port: BusHDL,
@@ -774,7 +774,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn port_mappings(&mut self) -> Result<Vec<PortMapping>, Box<dyn Error>> {
+    fn port_mappings(&mut self) -> Result<Vec<PortMappingHDL>, Box<dyn Error>> {
         let mut mappings = Vec::new();
 
         self.consume(TokenType::LeftParen)?;
@@ -792,7 +792,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     let wire = self.consume(TokenType::Identifier)?;
                     let (wire_start, wire_end) = self.bus_idx()?;
 
-                    mappings.push(PortMapping {
+                    mappings.push(PortMappingHDL {
                         wire_ident: Identifier::from(t.clone()),
                         wire: BusHDL {
                             name: wire.lexeme,

@@ -208,20 +208,22 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
-// 9.6 Component instantiation statements
+
+/// Abstract VHDL component.
+/// label : unit generic map (...) port map (...)
 pub struct VhdlComponent {
     label: String,
     unit: String,
     generic_params: Vec<GenericWidth>,
-    port_mappings: Vec<VhdlPortMapping>,
+    port_mappings: Vec<PortMappingVHDL>,
 }
 
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
-        let port_mappings: Vec<VhdlPortMapping> = component
+        let port_mappings: Vec<PortMappingVHDL> = component
             .mappings
             .iter()
-            .map(|x| VhdlPortMapping::from(x))
+            .map(|x| PortMappingVHDL::from(x))
             .collect();
 
         VhdlComponent {
@@ -233,12 +235,15 @@ impl From<&Component> for VhdlComponent {
     }
 }
 
+
+/// Conversion from VhdlComponents to Components is necessary
+/// because infer_widths operates over Components.
 impl From<&VhdlComponent> for Component {
     fn from(vc: &VhdlComponent) -> Self {
         Component {
             name: Identifier::from(&vc.unit[..]),
             generic_params: vc.generic_params.clone(),
-            mappings: vc.port_mappings.iter().map(|x| PortMapping::from(&x)).collect()
+            mappings: vc.port_mappings.iter().map(|x| PortMappingHDL::from(x)).collect()
         }
     }
 }
@@ -353,21 +358,21 @@ impl fmt::Display for VhdlPort {
 }
 
 #[derive(Clone)]
-pub struct VhdlPortMapping {
+pub struct PortMappingVHDL {
     pub wire_name: String,
     pub port: BusVHDL,
     pub wire: BusVHDL,
 }
 
-impl std::fmt::Display for VhdlPortMapping {
+impl std::fmt::Display for PortMappingVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} <= {}", &self.port, &self.wire)
     }
 }
 
-impl From<&PortMapping> for VhdlPortMapping {
-    fn from(pm: &PortMapping) -> Self {
-        VhdlPortMapping {
+impl From<&PortMappingHDL> for PortMappingVHDL {
+    fn from(pm: &PortMappingHDL) -> Self {
+        PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
             port: BusVHDL::from(pm.port),
             wire: BusVHDL::from(pm.wire),
@@ -375,9 +380,9 @@ impl From<&PortMapping> for VhdlPortMapping {
     }
 }
 
-impl From<&VhdlPortMapping> for PortMapping {
-    fn from(pm: &VhdlPortMapping) -> Self {
-        PortMapping {
+impl From<&PortMappingVHDL> for PortMappingHDL {
+    fn from(pm: &PortMappingVHDL) -> Self {
+        PortMappingHDL {
             wire_ident: Identifier::from(pm.wire.name.clone()),
             wire_name: pm.wire.name.clone(),
             port: BusHDL::from(pm.port),
