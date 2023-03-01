@@ -256,10 +256,17 @@ impl fmt::Display for VhdlComponent {
     }
 }
 
+/// BusVHDL represents the abstract VHDL syntax for an array.
+/// VHDL example: foo(3 downto 0) or bar(X downto 0)
 #[derive(Clone)]
 pub struct BusVHDL {
+    /// The name of the signal. This is foo or bar in the example above.
     pub name: String,
+
+    /// The start of the slice (inclusive). This will be None for signals without indices.
     pub start: Option<GenericWidth>,
+
+    /// The end of the slice (exclusive). This will be None for signals without indices.
     pub end: Option<GenericWidth>,
 }
 
@@ -273,10 +280,17 @@ impl From<&BusHDL> for BusVHDL {
     }
 }
 
+/// Synthesizes VHDL for BusVHDL.
 impl std::fmt::Display for BusVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.name),
-        => write!(f, "{}({} downto {})", keyw(&self.name), r.start, r.end),
+        // Only write out downto syntax if this is an array.
+        if self.start.is_some() {
+            let start : &GenericWidth = self.start.as_ref().unwrap();
+            let end : &GenericWidth = self.end.as_ref().unwrap();
+            write!(f, "{}({} downto {})", keyw(&self.name), start, end)
+        } else {
+            write!(f, "{}", &self.name)
+        }
     }
 }
 
