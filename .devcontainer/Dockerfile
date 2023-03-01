@@ -9,18 +9,11 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends openjdk-11-jdk-headless
 
-
-# Jupyter / data analysis
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends jupyter python3-pip python3-setuptools python3-dev texlive-latex-base dvipng texlive-latex-extra texlive-fonts-recommended cm-super
-
 # From the vs code rust container
 # https://github.com/microsoft/vscode-dev-containers/blob/main/containers/rust/.devcontainer/library-scripts/rust-debian.sh
 COPY library-scripts/*.sh library-scripts/*.env /tmp/library-scripts/
 RUN bash /tmp/library-scripts/rust-debian.sh "${CARGO_HOME}" "${RUSTUP_HOME}" "${USERNAME}" "true" "true" \
     && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts
-
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-cli -y
 
 # Quartus Prime
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
