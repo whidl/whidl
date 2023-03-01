@@ -181,7 +181,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     testbench_file.write_all(test_bench_vhdl.as_bytes())?;
 
     let source_code = fs::read_to_string(&test_script.hdl_path)?;
-    let mut scanner = Scanner::new(&source_code, test_script.hdl_path.clone());
+    let mut scanner = Scanner::new(&source_code, test_script.hdl_path);
     let base_path = scanner.path.parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let mut parser = Parser::new(&mut scanner, provider);

@@ -27,9 +27,11 @@ use parser::Parser;
 use scanner::Scanner;
 use std::error::Error;
 use std::fs;
-use std::path::{PathBuf};
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
+
+use crate::vhdl::write_quartus_project;
 
 #[derive(ArgParser)]
 #[clap(version)]
@@ -78,7 +80,7 @@ enum Commands {
 }
 
 fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-    let source_code = fs::read_to_string(&hdl_path)?;
+    let source_code = fs::read_to_string(hdl_path)?;
     let mut scanner = Scanner::new(&source_code, hdl_path.clone());
     let base_path = hdl_path.parent().unwrap();
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
@@ -87,8 +89,9 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
 
     let chip_vhdl : VhdlEntity = VhdlEntity::try_from(&hdl)?;
     println!("{}", &chip_vhdl);
-    //let quartus_dir = Path::new(&output_dir);
-    //let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    let quartus_dir = Path::new(&output_dir);
+    let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    write_quartus_project(&project);
 
     Ok(())
 }
@@ -99,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match &cli.command {
         Commands::SynthVHDL { output_dir, path } => {
             // Try synthesizing a Chip. If that fails, try synthesizing a test.
-            match fs::create_dir(&output_dir) {
+            match fs::create_dir(output_dir) {
                 Ok(_) => (),
                 Err(e) => {
                     return Err(Box::new(TransformedError {
@@ -128,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         Commands::Check { top_level_file } => {
-            let source_code = fs::read_to_string(&top_level_file)?;
+            let source_code = fs::read_to_string(top_level_file)?;
             let mut scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
             let base_path = scanner.path.parent().unwrap();
             let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
