@@ -109,6 +109,7 @@ impl fmt::Display for VhdlEntity {
         writeln!(f);
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name));
+        writeln!(f, "begin");
         self.signals.iter().for_each(|x| {
             writeln!(f, "signal {}", x);
         });
@@ -116,6 +117,7 @@ impl fmt::Display for VhdlEntity {
         self.components.iter().for_each(|x| {
             writeln!(f, "{}", x);
         });
+        writeln!(f, "end arch");
 
         write!(f, "")
     }
@@ -808,18 +810,15 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         keyw(&qp.chip_vhdl.name)
     )?;
 
-    // write vhdl file, then recursively go through components.
-    // components work list
-    // for chip_vhdl in &qp.chip_vhdl.dependencies {
-    //     let chip_filename = chip_vhdl.name.clone() + ".vhdl";
-    //     let mut file = File::create(qp.project_dir.join(&chip_filename))?;
-    //     file.write_all(format!("{}", chip_vhdl).as_bytes())?;
-    //     writeln!(
-    //         tcl,
-    //         "set_global_assignment -name VHDL_FILE {}",
-    //         chip_filename
-    //     )?;
-    // }
+    let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
+    let mut file = File::create(qp.project_dir.join(&chip_filename))?;
+    file.write_all(format!("{}", qp.chip_vhdl).as_bytes())?;
+
+    writeln!(
+        tcl,
+        "set_global_assignment -name VHDL_FILE {}",
+        chip_filename
+    )?;
 
     let nand_vhdl = r#"
 library ieee;

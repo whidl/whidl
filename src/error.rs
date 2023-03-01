@@ -113,6 +113,14 @@ impl std::fmt::Display for N2VError {
                     return writeln!(f, "{}", self.msg);
                 }
 
+                if ident.path.is_none() {
+                    return writeln!(f, "Bad path: {}", self.msg);
+                }
+
+                if ident.path.as_ref().unwrap().file_name().is_none() {
+                    return writeln!(f, "Bad filename: {}", self.msg);
+                }
+
                 let hdl = match provider.get_hdl(
                     ident
                         .path
