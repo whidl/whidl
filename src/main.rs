@@ -27,7 +27,7 @@ use parser::Parser;
 use scanner::Scanner;
 use std::error::Error;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::ptr;
 use std::rc::Rc;
 

@@ -285,6 +285,16 @@ impl From<&BusHDL> for BusVHDL {
     }
 }
 
+impl From<&BusVHDL> for BusHDL {
+    fn from(vhdl: &BusVHDL) -> Self {
+        BusHDL {
+            name: vhdl.name.clone(),
+            start: vhdl.start.clone(),
+            end: vhdl.end.clone(),
+        }
+    }
+}
+
 /// Synthesizes VHDL for BusVHDL.
 impl std::fmt::Display for BusVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
