@@ -116,45 +116,9 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     // Worklist is set of chip names that we need to convert from HDL to VHDL.
     let mut worklist: Vec<String> = Vec::new();
 
-    // Seed the worklist with all components of the top-level entity.
-    for part in &project.chip_hdl.parts {
-        match part {
-            Part::Component(c) => {
-                if !done.contains(&c.name.value) {
-                    done.insert(c.name.value.clone());
-                    worklist.push(c.name.value.clone());
-                }
-            }
-            Part::Loop(l) => {
-                for c in &l.body {
-                    if !done.contains(&c.name.value) {
-                        done.insert(c.name.value.clone());
-                        worklist.push(c.name.value.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    while !worklist.is_empty() {
-        let next_chip_name = worklist.pop().unwrap();
-        println!("{}", next_chip_name);
-        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
-
-        let next_source_code = fs::read_to_string(&next_hdl_path)?;
-        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
-        let mut next_parser = Parser::new(&mut next_scanner, provider.clone());
-        let next_hdl = next_parser.parse()?;
-
-        // Convert HDL to VHDL (VHDl synthesis).
-        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
-
-        let next_filename = next_chip_name.clone() + ".vhdl";
-        let mut next_file = File::create(quartus_dir.join(&next_filename))?;
-        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
-
-        for part in &next_hdl.parts {
+    // Pushes parts onto the worklist.
+    fn push_parts(parts: &Vec<Part>, worklist: &mut Vec<String>, done: &mut HashSet<String>) {
+        for part in parts {
             match part {
                 Part::Component(c) => {
                     if !done.contains(&c.name.value) {
@@ -173,7 +137,30 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
                 _ => {}
             }
         }
-        }
+    };
+
+    // Seed the worklist with all components of the top-level entity.
+    push_parts(&project.chip_hdl.parts, &mut worklist, &mut done);
+
+    while !worklist.is_empty() {
+        let next_chip_name = worklist.pop().unwrap();
+        println!("{}", next_chip_name);
+        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
+
+        let next_source_code = fs::read_to_string(&next_hdl_path)?;
+        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
+        let mut next_parser = Parser::new(&mut next_scanner, provider.clone());
+        let next_hdl = next_parser.parse()?;
+
+        // Convert HDL to VHDL (VHDl synthesis).
+        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
+
+        let next_filename = next_chip_name.clone() + ".vhdl";
+        let mut next_file = File::create(quartus_dir.join(&next_filename))?;
+        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
+
+        push_parts(&next_hdl.parts, &mut worklist, &mut done);
+    }
 
     Ok(())
 }
