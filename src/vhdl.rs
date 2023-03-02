@@ -101,9 +101,11 @@ impl fmt::Display for VhdlEntity {
             writeln!(f, "{}", x).unwrap();
         });
 
+        writeln!(f, "port (").unwrap();
         self.ports.iter().for_each(|x| {
             writeln!(f, "{}", x).unwrap();
         });
+        writeln!(f, ");").unwrap();
 
         writeln!(f, "end entity {};", keyw(&self.name))?;
         writeln!(f)?;
@@ -261,7 +263,7 @@ impl fmt::Display for VhdlComponent {
             .collect::<Vec<String>>()
             .join(", ");
 
-        writeln!(f, "{} port map({});", self.unit, mappings_vhdl)
+        writeln!(f, "{} port map({});", keyw(&self.unit), mappings_vhdl)
     }
 }
 
