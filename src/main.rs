@@ -137,7 +137,7 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
                 _ => {}
             }
         }
-    };
+    }
 
     // Seed the worklist with all components of the top-level entity.
     push_parts(&project.chip_hdl.parts, &mut worklist, &mut done);

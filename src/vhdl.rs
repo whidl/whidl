@@ -4,7 +4,7 @@
 // TOD0: component counter
 // TODO: component declarations
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::fmt::Write;
@@ -25,11 +25,12 @@ pub struct Signal {
 }
 
 pub struct VhdlEntity {
-    pub name: String,
-    generics: Vec<String>,
-    ports: Vec<VhdlPort>,
-    signals: Vec<Signal>,
-    components: Vec<VhdlComponent>,
+    pub name: String,                  // The name of this chip.
+    generics: Vec<String>,             // Declared generics.
+    ports: Vec<VhdlPort>,              // Declared ports.
+    signals: Vec<Signal>,              // Declared signals.
+    components: Vec<VhdlComponent>,    // Component instantiations.
+    dependencies: HashSet<VhdlEntity>, // Entities for components.
 }
 impl Hash for VhdlEntity {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -115,6 +116,62 @@ impl<'a> Cage<'a> for &Vec<VhdlPort> {}
 //
 // The fmt::Display trait is used to convert VHDL abstract syntax nodes
 // to VHDL concrete syntax.
+
+impl fmt::Display for VhdlEntity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "library ieee;")?;
+        writeln!(f, "use ieee.std_logic_1164.all;")?;
+        writeln!(f)?;
+
+        // Final VHDL generated for the top-level chip.
+        writeln!(f, "entity {} is", keyw(&self.name))?;
+
+        for x in &self.generics {
+            writeln!(f, "{}", x)?;
+        }
+
+        writeln!(f, "port (")?;
+        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
+        writeln!(f, "{}", port_vec.join(";\n"))?;
+        writeln!(f, ");")?;
+
+        writeln!(f, "end entity {};", keyw(&self.name))?;
+        writeln!(f)?;
+
+        writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
+        for x in &self.dependencies {
+            writeln!(f, "{}", x.declaration()?);
+        }
+        for x in &self.signals {
+            writeln!(f, "signal {}", x)?;
+        }
+
+        writeln!(f, "begin")?;
+        for x in &self.components {
+            writeln!(f, "{}", x)?;
+        }
+
+        writeln!(f, "end arch;")?;
+        write!(f, "")
+    }
+}
+
+// Declaration VHDL for an entity.
+impl VhdlEntity {
+    fn declaration(&self) -> Result<String, std::fmt::Error> {
+        let mut decl = String::new();
+
+        writeln!(decl, "component {} is", keyw(&self.name))?;
+        writeln!(decl, "port (")?;
+        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
+        writeln!(decl, "{}", port_vec.join(";\n"))?;
+        writeln!(decl, ");")?;
+        writeln!(decl, "end component {};", keyw(&self.name))?;
+
+        Ok(decl)
+    }
+}
+
 impl fmt::Display for Signal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} : ", self.name)?;
@@ -141,43 +198,6 @@ impl fmt::Display for Signal {
         }
     }
 }
-
-impl fmt::Display for VhdlEntity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "library ieee;")?;
-        writeln!(f, "use ieee.std_logic_1164.all;")?;
-        writeln!(f)?;
-
-        // Final VHDL generated for the top-level chip.
-        writeln!(f, "entity {} is", keyw(&self.name))?;
-
-        self.generics.iter().for_each(|x| {
-            writeln!(f, "{}", x).unwrap();
-        });
-
-        writeln!(f, "port (")?;
-        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
-        writeln!(f, "{}", port_vec.join(";\n"))?;
-        writeln!(f, ");")?;
-
-        writeln!(f, "end entity {};", keyw(&self.name))?;
-        writeln!(f)?;
-
-        writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
-        self.signals.iter().for_each(|x| {
-            writeln!(f, "signal {}", x).unwrap();
-        });
-        writeln!(f, "begin")?;
-
-        self.components.iter().for_each(|x| {
-            writeln!(f, "{}", x).unwrap();
-        });
-        writeln!(f, "end arch;")?;
-
-        write!(f, "")
-    }
-}
-
 impl fmt::Display for VhdlComponent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mappings_vhdl: String = self
@@ -256,7 +276,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     fn try_from(chip_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
         // Declare components
         let vhdl_components = generate_components(chip_hdl);
-        let mut generics: Vec<String> = Vec::new();
+        let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
         let components: Vec<Component> = vhdl_components
             .iter()
@@ -326,12 +346,21 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         //         Part::AssignmentHDL(_) => {}
         //     }
 
+        let dependencies: HashSet<VhdlEntity> = vhdl_components
+            .iter()
+            .map(|component| {
+                let component_hdl = get_hdl(&component.unit, &chip_hdl.provider).unwrap();
+                VhdlEntity::try_from(&component_hdl).unwrap()
+            })
+            .collect();
+
         Ok(VhdlEntity {
             name: chip_hdl.name.clone(),
             generics,
             ports,
             signals,
             components: vhdl_components,
+            dependencies,
         })
     }
 }
@@ -513,27 +542,24 @@ impl QuartusProject {
 //         };
 //     }
 
-//     /// Generates the declaration for a component that can be included in the VHDL.
-//     /// of another chip that uses this component.
-//     fn generate_component_declaration(
-//         &self,
-//         component: &Component,
-//     ) -> Result<String, Box<dyn Error>> {
-//         let component_hdl = get_hdl(&component.name.value, &self.provider)?;
-//         let mut component_decl = String::new();
-//         writeln!(
-//             &mut component_decl,
-//             "component {}",
-//             keyw(&component_hdl.name)
-//         )
-//         .unwrap();
-//         write!(&mut component_decl, "{}", generics(&component_hdl)?)?;
-//         write!(&mut component_decl, "{}", ports(&component_hdl))?;
-//         writeln!(&mut component_decl, "end component;")?;
-//         writeln!(&mut component_decl)?;
+/// Generates the declaration for a component that can be included in the VHDL.
+/// of another chip that uses this component.
+// fn generate_component_declaration(&self, component: &Component) -> Result<String, Box<dyn Error>> {
+//     let component_hdl = get_hdl(&component.name.value, &self.provider)?;
+//     let mut component_decl = String::new();
+//     writeln!(
+//         &mut component_decl,
+//         "component {}",
+//         keyw(&component_hdl.name)
+//     )
+//     .unwrap();
+//     write!(&mut component_decl, "{}", generics(&component_hdl)?)?;
+//     write!(&mut component_decl, "{}", ports(&component_hdl))?;
+//     writeln!(&mut component_decl, "end component;")?;
+//     writeln!(&mut component_decl)?;
 
-//         Ok(component_decl)
-//     }
+//     Ok(component_decl)
+// }
 
 //     fn synth_component(
 //         self,
