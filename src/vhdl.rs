@@ -1,8 +1,9 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
-// TODO: Arrow direction
-// TODO: keyw signal names
+
+// TOD0: semicolon at the end of arch
+// TOD0: component counter
 // TODO: _n2v suffixes for vhdl file names
 
 use std::collections::{HashMap, HashSet};
@@ -106,7 +107,7 @@ impl fmt::Display for VhdlEntity {
         });
 
         writeln!(f, "port (")?;
-        let port_vec : Vec<String> = self.ports.iter().map(|x| { x.to_string() }).collect();
+        let port_vec : Vec<String> = self.ports.iter().map(|x| { keyw(&x.to_string()) }).collect();
         writeln!(f, "{}", port_vec.join(";\n"))?;
         writeln!(f, ");")?;
 
@@ -122,7 +123,7 @@ impl fmt::Display for VhdlEntity {
         self.components.iter().for_each(|x| {
             writeln!(f, "{}", x).unwrap();
         });
-        writeln!(f, "end arch")?;
+        writeln!(f, "end arch;")?;
 
         write!(f, "")
     }
@@ -313,7 +314,7 @@ impl std::fmt::Display for BusVHDL {
             let end: &GenericWidth = self.end.as_ref().unwrap();
             write!(f, "{}({} downto {})", keyw(&self.name), start, end)
         } else {
-            write!(f, "{}", &self.name)
+            write!(f, "{}", keyw(&self.name))
         }
     }
 }
@@ -385,7 +386,7 @@ pub struct PortMappingVHDL {
 
 impl std::fmt::Display for PortMappingVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} <= {}", &self.port, &self.wire)
+        write!(f, "{} => {}", &self.port, &self.wire)
     }
 }
 
