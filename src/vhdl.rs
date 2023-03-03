@@ -2,9 +2,8 @@
 // producing equivalent VHDL code.
 
 
-// TOD0: semicolon at the end of arch
 // TOD0: component counter
-// TODO: _n2v suffixes for vhdl file names
+// TODO: component declarations
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
