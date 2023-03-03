@@ -1,24 +1,91 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
-
 // TOD0: component counter
 // TODO: component declarations
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Write;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
-use std::ops::Range;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
+
+// ========= STRUCTS ========== //
+#[derive(Debug)]
+pub struct Signal {
+    pub name: String,
+    pub width: GenericWidth,
+}
+
+pub struct VhdlEntity {
+    pub name: String,
+    generics: Vec<String>,
+    ports: Vec<VhdlPort>,
+    signals: Vec<Signal>,
+    components: Vec<VhdlComponent>,
+}
+impl Hash for VhdlEntity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+impl PartialEq for VhdlEntity {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for VhdlEntity {}
+
+/// Abstract VHDL component.
+/// label : unit generic map (...) port map (...)
+pub struct VhdlComponent {
+    label: String,
+    unit: String,
+    generic_params: Vec<GenericWidth>,
+    port_mappings: Vec<PortMappingVHDL>,
+}
+
+/// BusVHDL represents the abstract VHDL syntax for an array.
+/// VHDL example: foo(3 downto 0) or bar(X downto 0)
+#[derive(Clone)]
+pub struct BusVHDL {
+    /// The name of the signal. This is foo or bar in the example above.
+    pub name: String,
+
+    /// The start of the slice (inclusive). This will be None for signals without indices.
+    pub start: Option<GenericWidth>,
+
+    /// The end of the slice (exclusive). This will be None for signals without indices.
+    pub end: Option<GenericWidth>,
+}
+
+#[derive(Clone)]
+pub struct PortMappingVHDL {
+    pub wire_name: String,
+    pub port: BusVHDL,
+    pub wire: BusVHDL,
+}
+
+pub struct QuartusProject {
+    pub chip_hdl: ChipHDL,
+    pub chip_vhdl: VhdlEntity,
+    pub project_dir: PathBuf,
+}
+
+struct VhdlPort {
+    pub name: String,
+    pub width: GenericWidth,
+    pub direction: PortDirection,
+}
+
+// ========= TRAITS ========== //
 
 /// A Pet is an object that we track by name.
 pub trait Pet<'a> {
@@ -36,14 +103,18 @@ pub trait Cage<'a> {
     }
 }
 
-impl<'a> Cage<'a> for &Vec<VhdlPort> {}
-
-#[derive(Debug)]
-pub struct Signal {
-    pub name: String,
-    pub width: GenericWidth,
+impl<'a> Pet<'a> for &'a VhdlPort {
+    fn name(&self) -> &'a str {
+        &self.name
+    }
 }
 
+impl<'a> Cage<'a> for &Vec<VhdlPort> {}
+
+// ========= DISPLAY ========== //
+//
+// The fmt::Display trait is used to convert VHDL abstract syntax nodes
+// to VHDL concrete syntax.
 impl fmt::Display for Signal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} : ", self.name)?;
@@ -71,27 +142,6 @@ impl fmt::Display for Signal {
     }
 }
 
-pub struct VhdlEntity {
-    pub name: String,
-    generics: Vec<String>,
-    ports: Vec<VhdlPort>,
-    signals: Vec<Signal>,
-    components: Vec<VhdlComponent>,
-}
-
-impl Hash for VhdlEntity {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
-impl PartialEq for VhdlEntity {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-impl Eq for VhdlEntity {}
-
 impl fmt::Display for VhdlEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "library ieee;")?;
@@ -106,7 +156,7 @@ impl fmt::Display for VhdlEntity {
         });
 
         writeln!(f, "port (")?;
-        let port_vec : Vec<String> = self.ports.iter().map(|x| { keyw(&x.to_string()) }).collect();
+        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
         writeln!(f, "{}", port_vec.join(";\n"))?;
         writeln!(f, ");")?;
 
@@ -127,6 +177,77 @@ impl fmt::Display for VhdlEntity {
         write!(f, "")
     }
 }
+
+impl fmt::Display for VhdlComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mappings_vhdl: String = self
+            .port_mappings
+            .iter()
+            .map(|x| format!("{}", x))
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        writeln!(f, "{} port map({});", keyw(&self.unit), mappings_vhdl)
+    }
+}
+
+/// Synthesizes VHDL for BusVHDL.
+impl std::fmt::Display for BusVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Only write out downto syntax if this is an array.
+        if self.start.is_some() {
+            let start: &GenericWidth = self.start.as_ref().unwrap();
+            let end: &GenericWidth = self.end.as_ref().unwrap();
+            write!(f, "{}({} downto {})", keyw(&self.name), start, end)
+        } else {
+            write!(f, "{}", keyw(&self.name))
+        }
+    }
+}
+
+impl fmt::Display for VhdlPort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} : ", keyw(&self.name))?;
+
+        if self.direction == PortDirection::In {
+            write!(f, "in ")?;
+        } else {
+            write!(f, "out ")?;
+        }
+
+        match self.width {
+            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
+                if port_width_num > 1 {
+                    write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
+                } else {
+                    write!(f, "std_logic")?;
+                }
+            }
+            _ => {
+                let sub1 = GenericWidth::Expr(
+                    Op::Sub,
+                    Box::new(self.width.clone()),
+                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+                );
+                write!(
+                    f,
+                    "std_logic_vector({} downto 0)",
+                    eval_expr(&sub1, &HashMap::new())
+                )?;
+            }
+        };
+
+        write!(f, "")
+    }
+}
+
+impl std::fmt::Display for PortMappingVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} => {}", &self.port, &self.wire)
+    }
+}
+
+// ========= CONVERSIONS ========== //
 
 /// This is where VHDL is synthesized for an HDL chip.
 impl TryFrom<&ChipHDL> for VhdlEntity {
@@ -215,15 +336,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
-/// Abstract VHDL component.
-/// label : unit generic map (...) port map (...)
-pub struct VhdlComponent {
-    label: String,
-    unit: String,
-    generic_params: Vec<GenericWidth>,
-    port_mappings: Vec<PortMappingVHDL>,
-}
-
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
         let port_mappings: Vec<PortMappingVHDL> = component
@@ -257,33 +369,6 @@ impl From<&VhdlComponent> for Component {
     }
 }
 
-impl fmt::Display for VhdlComponent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mappings_vhdl: String = self
-            .port_mappings
-            .iter()
-            .map(|x| format!("{}", x))
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        writeln!(f, "{} port map({});", keyw(&self.unit), mappings_vhdl)
-    }
-}
-
-/// BusVHDL represents the abstract VHDL syntax for an array.
-/// VHDL example: foo(3 downto 0) or bar(X downto 0)
-#[derive(Clone)]
-pub struct BusVHDL {
-    /// The name of the signal. This is foo or bar in the example above.
-    pub name: String,
-
-    /// The start of the slice (inclusive). This will be None for signals without indices.
-    pub start: Option<GenericWidth>,
-
-    /// The end of the slice (exclusive). This will be None for signals without indices.
-    pub end: Option<GenericWidth>,
-}
-
 impl From<&BusHDL> for BusVHDL {
     fn from(hdl: &BusHDL) -> Self {
         BusVHDL {
@@ -304,32 +389,6 @@ impl From<&BusVHDL> for BusHDL {
     }
 }
 
-/// Synthesizes VHDL for BusVHDL.
-impl std::fmt::Display for BusVHDL {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Only write out downto syntax if this is an array.
-        if self.start.is_some() {
-            let start: &GenericWidth = self.start.as_ref().unwrap();
-            let end: &GenericWidth = self.end.as_ref().unwrap();
-            write!(f, "{}({} downto {})", keyw(&self.name), start, end)
-        } else {
-            write!(f, "{}", keyw(&self.name))
-        }
-    }
-}
-
-struct VhdlPort {
-    pub name: String,
-    pub width: GenericWidth,
-    pub direction: PortDirection,
-}
-
-impl<'a> Pet<'a> for &'a VhdlPort {
-    fn name(&self) -> &'a str {
-        &self.name
-    }
-}
-
 impl From<&GenericPort> for VhdlPort {
     fn from(port: &GenericPort) -> Self {
         VhdlPort {
@@ -337,55 +396,6 @@ impl From<&GenericPort> for VhdlPort {
             width: port.width.clone(),
             direction: port.direction,
         }
-    }
-}
-
-impl fmt::Display for VhdlPort {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} : ", keyw(&self.name))?;
-
-        if self.direction == PortDirection::In {
-            write!(f, "in ")?;
-        } else {
-            write!(f, "out ")?;
-        }
-
-        match self.width {
-            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
-                if port_width_num > 1 {
-                    write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
-                } else {
-                    write!(f, "std_logic")?;
-                }
-            }
-            _ => {
-                let sub1 = GenericWidth::Expr(
-                    Op::Sub,
-                    Box::new(self.width.clone()),
-                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
-                );
-                write!(
-                    f,
-                    "std_logic_vector({} downto 0)",
-                    eval_expr(&sub1, &HashMap::new())
-                )?;
-            }
-        };
-
-        write!(f, "")
-    }
-}
-
-#[derive(Clone)]
-pub struct PortMappingVHDL {
-    pub wire_name: String,
-    pub port: BusVHDL,
-    pub wire: BusVHDL,
-}
-
-impl std::fmt::Display for PortMappingVHDL {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} => {}", &self.port, &self.wire)
     }
 }
 
@@ -407,12 +417,6 @@ impl From<&PortMappingVHDL> for PortMappingHDL {
             wire: BusHDL::from(&pm.wire),
         }
     }
-}
-
-pub struct QuartusProject {
-    pub chip_hdl: ChipHDL,
-    pub chip_vhdl: VhdlEntity,
-    pub project_dir: PathBuf,
 }
 
 impl QuartusProject {
