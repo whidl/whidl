@@ -1,6 +1,10 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
+// TODO: Arrow direction
+// TODO: keyw signal names
+// TODO: _n2v suffixes for vhdl file names
+
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -101,20 +105,19 @@ impl fmt::Display for VhdlEntity {
             writeln!(f, "{}", x).unwrap();
         });
 
-        writeln!(f, "port (").unwrap();
-        self.ports.iter().for_each(|x| {
-            writeln!(f, "{}", x).unwrap();
-        });
-        writeln!(f, ");").unwrap();
+        writeln!(f, "port (")?;
+        let port_vec : Vec<String> = self.ports.iter().map(|x| { x.to_string() }).collect();
+        writeln!(f, "{}", port_vec.join(";\n"))?;
+        writeln!(f, ");")?;
 
         writeln!(f, "end entity {};", keyw(&self.name))?;
         writeln!(f)?;
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
-        writeln!(f, "begin")?;
         self.signals.iter().for_each(|x| {
             writeln!(f, "signal {}", x).unwrap();
         });
+        writeln!(f, "begin")?;
 
         self.components.iter().for_each(|x| {
             writeln!(f, "{}", x).unwrap();

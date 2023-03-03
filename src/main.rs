@@ -144,7 +144,6 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
 
     while !worklist.is_empty() {
         let next_chip_name = worklist.pop().unwrap();
-        println!("{}", next_chip_name);
         let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
 
         let next_source_code = fs::read_to_string(&next_hdl_path)?;
