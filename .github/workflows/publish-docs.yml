@@ -3,7 +3,7 @@ name: Publish mdbook to GitHub pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: ["main", "publish-docs"]
     paths:
       - 'docs/**'
 
@@ -31,17 +31,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install mdbook
-        run: cargo install mdbook
       - name: Build book
-        run: cd docs && mdbook build
+        run:
+          wasm-pack build --target web
+          cd docs && npm install && npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: 'docs/book'
+          path: 'docs/dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
