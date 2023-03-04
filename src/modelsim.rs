@@ -8,6 +8,7 @@ use crate::simulator::Bus;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
 use crate::vhdl::{keyw, VhdlEntity, VhdlComponent};
+use crate::ChipHDL;
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -22,7 +23,7 @@ use bitvec::prelude::*;
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
     /// Name of chip being tested.
-    chip_name: String,
+    chip: ChipHDL,
     /// Signals required for inputs/outputs.
     signals: TestbenchSignals,
     /// Individual steps to perform.
@@ -57,7 +58,7 @@ impl TryFrom<&TestScript> for TestBench {
         let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
 
         Ok(TestBench {
-            chip_name: keyw(&hdl.name),
+            chip: hdl,
             signals: TestbenchSignals::from(&test_script.output_list),
             instructions: Vec::new(),
         })
@@ -68,7 +69,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
     type Error = Box<dyn Error>;
 
     fn try_from(test_bench: &TestBench) -> Result<Self, Box<dyn Error>> {
-        let name = test_bench.chip_name.clone() + "_tst";
+        let name = test_bench.chip.name.clone() + "_tst";
         let generics = Vec::new();
         let ports = Vec::new();
         let signals = Vec::new();
@@ -77,7 +78,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
         // Only component is the chip being tested.
         let mut components = Vec::new();
         components.push(VhdlComponent {
-            unit: keyw(&test_bench.chip_name),
+            unit: keyw(&test_bench.chip.name),
             generic_params: Vec::new(),
             port_mappings: Vec::new(),
         });
