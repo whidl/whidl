@@ -129,10 +129,12 @@ impl fmt::Display for VhdlEntity {
             writeln!(f, "{}", x)?;
         }
 
-        writeln!(f, "port (")?;
         let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
-        writeln!(f, "{}", port_vec.join(";\n"))?;
-        writeln!(f, ");")?;
+        if !port_vec.is_empty() {
+            writeln!(f, "port (")?;
+            writeln!(f, "{}", port_vec.join(";\n"))?;
+            writeln!(f, ");")?;
+        }
 
         writeln!(f, "end entity {};", keyw(&self.name))?;
         writeln!(f)?;
