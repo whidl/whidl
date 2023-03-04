@@ -34,8 +34,10 @@ jobs:
       - name: Build book
         run:
           cargo install wasm-pack
-          wasm-pack build --target web
-          cd docs && npm install && npm run build
+          && wasm-pack build --target web
+          && cd docs 
+          && npm install
+          && npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Upload artifact
