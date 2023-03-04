@@ -2,7 +2,6 @@
 //! Modelsim testbenches.
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
-use crate::expr::GenericWidth;
 use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
 use crate::simulator::Bus;
@@ -12,7 +11,6 @@ use crate::vhdl::{keyw, VhdlEntity, VhdlComponent};
 
 use std::collections::HashSet;
 use std::error::Error;
-use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::Write;

@@ -134,7 +134,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         // Load cannot be a keyword because it is used as a port name.
         if self.consume(TokenType::Identifier).unwrap().lexeme != "load" {
             return Err(Box::new(N2VError {
-                msg: format!("Expected load"),
+                msg: String::from("Expected load"),
                 kind: ErrorKind::Other,
             }));
         }
