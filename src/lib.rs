@@ -71,7 +71,9 @@ pub fn simulate(s: &str, inputs: &str) -> Result<String, JsValue> {
     let mut simulator = Simulator::new(chip);
     let chip_inputs: HashMap<String, Vec<bool>> = serde_json::from_str(inputs)
         .unwrap_or_else(|_| panic!("Unable to parse inputs: {}", inputs));
-    let outputs = simulator.simulate(&BusMap::try_from(chip_inputs)?);
+
+    let outputs = simulator.simulate(&BusMap::try_from(chip_inputs)
+                                     .unwrap_or_else(|_| panic!("A simulation error occured")));
     Ok(format!("{:?}", outputs))
 }
 
