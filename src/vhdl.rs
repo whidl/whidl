@@ -25,7 +25,7 @@ pub struct Signal {
 }
 
 pub struct VhdlEntity {
-    pub name: String,                  // The name of this chip.
+    pub name: String,                      // The name of this chip.
     pub generics: Vec<String>,             // Declared generics.
     pub ports: Vec<VhdlPort>,              // Declared ports.
     pub signals: Vec<Signal>,              // Declared signals.
@@ -47,9 +47,9 @@ impl Eq for VhdlEntity {}
 /// Abstract VHDL component.
 /// unit generic map (...) port map (...)
 pub struct VhdlComponent {
-    unit: String,
-    generic_params: Vec<GenericWidth>,
-    port_mappings: Vec<PortMappingVHDL>,
+    pub unit: String,
+    pub generic_params: Vec<GenericWidth>,
+    pub port_mappings: Vec<PortMappingVHDL>,
 }
 
 /// BusVHDL represents the abstract VHDL syntax for an array.
@@ -812,7 +812,11 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         chip_filename
     )?;
     for dep in &qp.chip_vhdl.dependencies {
-        writeln!(tcl, "set_global_assignment -name VHDL_FILE {}", dep.name.clone() + ".vhdl")?;
+        writeln!(
+            tcl,
+            "set_global_assignment -name VHDL_FILE {}",
+            dep.name.clone() + ".vhdl"
+        )?;
     }
 
     let nand_vhdl = r#"

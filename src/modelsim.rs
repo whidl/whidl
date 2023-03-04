@@ -8,7 +8,7 @@ use crate::scanner::Scanner;
 use crate::simulator::Bus;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, VhdlEntity};
+use crate::vhdl::{keyw, VhdlEntity, VhdlComponent};
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -73,9 +73,16 @@ impl TryFrom<&TestBench> for VhdlEntity {
         let name = test_bench.chip_name.clone() + "_tst";
         let generics = Vec::new();
         let ports = Vec::new();
-        let components = Vec::new();
         let signals = Vec::new();
         let dependencies = HashSet::new();
+
+        // Only component is the chip being tested.
+        let mut components = Vec::new();
+        components.push(VhdlComponent {
+            unit: keyw(&test_bench.chip_name),
+            generic_params: Vec::new(),
+            port_mappings: Vec::new(),
+        });
 
         Ok(VhdlEntity {
             name,
