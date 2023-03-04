@@ -45,9 +45,8 @@ impl PartialEq for VhdlEntity {
 impl Eq for VhdlEntity {}
 
 /// Abstract VHDL component.
-/// label : unit generic map (...) port map (...)
+/// unit generic map (...) port map (...)
 pub struct VhdlComponent {
-    label: String,
     unit: String,
     generic_params: Vec<GenericWidth>,
     port_mappings: Vec<PortMappingVHDL>,
@@ -140,15 +139,15 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
         for x in &self.dependencies {
-            writeln!(f, "{}", x.declaration()?);
+            writeln!(f, "{}", x.declaration()?)?;
         }
         for x in &self.signals {
             writeln!(f, "signal {}", x)?;
         }
 
         writeln!(f, "begin")?;
-        for x in &self.components {
-            writeln!(f, "{}", x)?;
+        for (i, x) in self.components.iter().enumerate() {
+            writeln!(f, "c{}: {}", i, x)?;
         }
 
         writeln!(f, "end arch;")?;
@@ -306,46 +305,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             })
             .collect();
 
-        // for part in chip_hdl.parts {
-        //     match part {
-        //         Part::Component(c) => {
-        //             // Generate the VHDL definitions for each type of component.
-        //             let generated_definition = generate_component_definition(c)?;
-        //             if generated_definition.is_none() {
-        //                 continue;
-        //             }
-        //             self.entities
-        //                 .extend(generated_definition.unwrap().dependencies);
-
-        //             // Generate component declarations for components used by this chip.
-        //             // Only output one declaration even if the component is used multiple times.
-        //             let generated_declaration = self.generate_component_declaration(c)?;
-        //             if !component_decls.contains(&generated_declaration) {
-        //                 write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
-        //                 component_decls.insert(generated_declaration);
-        //             }
-        //         }
-        //         Part::Loop(lp) => {
-        //             for c in &lp.body {
-        //                 let generated_definition = self.generate_component_definition(c)?;
-        //                 if generated_definition.is_none() {
-        //                     continue;
-        //                 }
-        //                 self.entities
-        //                     .extend(generated_definition.unwrap().dependencies);
-
-        //                 // Generate component declarations for components used by this chip.
-        //                 // Only output one declaration even if the component is used multiple times.
-        //                 let generated_declaration = self.generate_component_declaration(c)?;
-        //                 if !component_decls.contains(&generated_declaration) {
-        //                     write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
-        //                     component_decls.insert(generated_declaration);
-        //                 }
-        //             }
-        //         }
-        //         Part::AssignmentHDL(_) => {}
-        //     }
-
         let dependencies: HashSet<VhdlEntity> = vhdl_components
             .iter()
             .map(|component| {
@@ -374,7 +333,6 @@ impl From<&Component> for VhdlComponent {
             .collect();
 
         VhdlComponent {
-            label: component.name.value.clone(),
             unit: component.name.value.clone(),
             generic_params: component.generic_params.clone(),
             port_mappings,
@@ -851,6 +809,9 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         "set_global_assignment -name VHDL_FILE {}",
         chip_filename
     )?;
+    for dep in &qp.chip_vhdl.dependencies {
+        writeln!(tcl, "set_global_assignment -name VHDL_FILE {}", dep.name.clone() + ".vhdl")?;
+    }
 
     let nand_vhdl = r#"
 library ieee;
@@ -867,7 +828,7 @@ begin
 out_n2v <= a nand b;
 end architecture arch;
 "#;
-    let mut file = File::create(qp.project_dir.join("nand.vhdl"))?;
+    let mut file = File::create(qp.project_dir.join("NAND.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
 
     let dff_vhdl = r#"
@@ -900,8 +861,6 @@ end architecture arch;
     let mut file = File::create(qp.project_dir.join("dff.vhdl"))?;
     file.write_all(dff_vhdl.as_bytes())?;
 
-    tcl.push_str("set_global_assignment -name VHDL_FILE nand.vhdl\n");
-    tcl.push_str("set_global_assignment -name VHDL_FILE dff.vhdl\n");
     tcl.push_str("project_close");
     let mut file = File::create(qp.project_dir.join("project.tcl"))?;
     file.write_all(tcl.as_bytes())?;
