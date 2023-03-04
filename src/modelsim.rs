@@ -3,13 +3,14 @@
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::expr::GenericWidth;
-use crate::parser::{parse_hdl_path, HdlProvider, Parser, FileReader};
+use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
+use crate::scanner::Scanner;
+use crate::simulator::Bus;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{Signal, PortMappingVHDL, BusVHDL, keyw, VhdlEntity};
-use crate::simulator::Bus;
-use crate::scanner::Scanner;
+use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, VhdlEntity};
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -65,79 +66,27 @@ impl TryFrom<&TestScript> for TestBench {
     }
 }
 
-/// Converts a TestBench into VHDL.
-impl fmt::Display for TestBench {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Libraries
-        writeln!(f, "library ieee;")?;
-        writeln!(f, "use ieee.std_logic_1164.all;")?;
+impl TryFrom<&TestBench> for VhdlEntity {
+    type Error = Box<dyn Error>;
 
-        // Entity declaration
-        let entity_name = self.chip_name.clone() + "_test";
-        writeln!(f)?;
-        writeln!(f, "-- Empty entity because this is just a test script.")?;
-        writeln!(f, "entity {} is", entity_name)?;
-        writeln!(f, "end entity {};", entity_name)?;
+    fn try_from(test_bench: &TestBench) -> Result<Self, Box<dyn Error>> {
+        let name = test_bench.chip_name.clone() + "_tst";
+        let generics = Vec::new();
+        let ports = Vec::new();
+        let components = Vec::new();
+        let signals = Vec::new();
+        let dependencies = HashSet::new();
 
-        // === Begin Architecture ===
-        writeln!(f)?;
-        writeln!(f, "architecture test_arch of {} is", entity_name)?;
-
-        // Signals. We need to declare inputs and outputs of chip that we are testing.
-        for s in &self.signals.value {
-            let range = s.range.as_ref().ok_or(std::fmt::Error)?;
-            let sig = Signal {
-                name: s.name.clone(),
-                width: GenericWidth::from(range),
-            };
-
-            // let signal_decl_vhdl =
-            //     crate::vhdl::signal_declaration(&sig).map_err(|_| std::fmt::Error)?;
-
-            // writeln!(f, "{}", signal_decl_vhdl)?;
-        }
-        writeln!(f, "begin")?;
-
-        // Instantiate the component to be tested.
-        // UUT : entity work.half_adder port map (
-        //    a => test_in_a, b => test_in_b, sum => test_out_sum, carry => test_out_carry
-        //);
-
-        // Convert list of signals into port mappings with port name
-        // matching signal name.
-        let port_mappings = self.signals.value.iter().map(|s| {
-            let port = BusVHDL {
-                name: keyw(&s.name.clone()),
-                start: None,
-                end: None,
-            };
-            let wire = BusVHDL {
-                name: keyw(&s.name.clone()),
-                start: None,
-                end: None,
-            };
-
-            PortMappingVHDL {
-                wire_name: self.chip_name.clone(),
-                port,
-                wire,
-            }
+        Ok(VhdlEntity {
+            name,
+            generics,
+            ports,
+            components,
+            signals,
+            dependencies,
         })
-        .map(|pm| format!("{}", pm))
-        .collect::<Vec<String>>()
-        .join(",");
-
-        writeln!(f, "TestComponent : entity {} port map ({});", self.chip_name, port_mappings)?;
-
-        // === End Architecture ===
-        writeln!(f, "end architecture test_arch;")?;
-
-        // End with a newline.
-        writeln!(f)
     }
 }
-
-
 
 /// Converts a nand2tetris test script file to a VHDL testbench to be run
 /// with Modelsim. This will convert the test script itself, and the
@@ -177,8 +126,8 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
         }
         Ok(f) => f,
     };
-    let test_bench_vhdl = test_bench.to_string();
-    testbench_file.write_all(test_bench_vhdl.as_bytes())?;
+    let vhdl_entity = VhdlEntity::try_from(&test_bench)?;
+    testbench_file.write_all(vhdl_entity.to_string().as_bytes())?;
 
     let source_code = fs::read_to_string(&test_script.hdl_path)?;
     let mut scanner = Scanner::new(&source_code, test_script.hdl_path);
@@ -189,8 +138,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     let chip_vhdl = VhdlEntity::try_from(&hdl)?;
 
     let quartus_dir = Path::new(&output_dir);
-    let _ =
-        crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    let _ = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
 
     Ok(())
 }

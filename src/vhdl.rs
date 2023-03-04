@@ -26,11 +26,11 @@ pub struct Signal {
 
 pub struct VhdlEntity {
     pub name: String,                  // The name of this chip.
-    generics: Vec<String>,             // Declared generics.
-    ports: Vec<VhdlPort>,              // Declared ports.
-    signals: Vec<Signal>,              // Declared signals.
-    components: Vec<VhdlComponent>,    // Component instantiations.
-    dependencies: HashSet<VhdlEntity>, // Entities for components.
+    pub generics: Vec<String>,             // Declared generics.
+    pub ports: Vec<VhdlPort>,              // Declared ports.
+    pub signals: Vec<Signal>,              // Declared signals.
+    pub components: Vec<VhdlComponent>,    // Component instantiations.
+    pub dependencies: HashSet<VhdlEntity>, // Entities for components.
 }
 impl Hash for VhdlEntity {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -79,7 +79,7 @@ pub struct QuartusProject {
     pub project_dir: PathBuf,
 }
 
-struct VhdlPort {
+pub struct VhdlPort {
     pub name: String,
     pub width: GenericWidth,
     pub direction: PortDirection,
@@ -819,8 +819,7 @@ use ieee.std_logic_1164.all;
 entity nand_n2v is
 port (a : in std_logic;
 b : in std_logic;
-out_n2v : out std_logic;
-CLOCK_50 : in std_logic
+out_n2v : out std_logic
 );
 end entity nand_n2v;
 architecture arch of nand_n2v is
@@ -839,7 +838,6 @@ USE altera.altera_primitives_components.all;
 
 entity DFF_n2v is
 port (in_n2v : in std_logic;
-CLOCK_50 : in std_logic;
 out_n2v : out std_logic);
 end entity DFF_n2v;
 
@@ -855,7 +853,7 @@ COMPONENT DFF
 END COMPONENT;
 
 begin
-x0: DFF port map (d => in_n2v, clk => CLOCK_50, clrn => '1', prn => '1', q => out_n2v);
+x0: DFF port map (d => in_n2v, clrn => '1', prn => '1', q => out_n2v);
 end architecture arch;
 "#;
     let mut file = File::create(qp.project_dir.join("dff.vhdl"))?;
