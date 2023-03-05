@@ -91,14 +91,14 @@ impl TryFrom<&TestBench> for VhdlEntity {
         let mut port_mappings = Vec::new();
         for port in &test_bench.chip.ports {
             port_mappings.push(PortMappingVHDL {
-                wire_name: port.name.value.clone() + "_test",
+                wire_name: port.name.value.clone(),
                 port: BusVHDL {
                     name: port.name.value.clone(),
                     start: None,
                     end: None,
                 },
                 wire: BusVHDL {
-                    name: port.name.value.clone() + "_test",
+                    name: port.name.value.clone(),
                     start: None,
                     end: None,
                 },
