@@ -18,7 +18,7 @@ use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
 
 // ========= STRUCTS ========== //
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Signal {
     pub name: String,
     pub width: GenericWidth,

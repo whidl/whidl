@@ -4,10 +4,9 @@
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
-use crate::simulator::Bus;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, VhdlComponent, VhdlEntity};
+use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, VhdlComponent, VhdlEntity};
 use crate::ChipHDL;
 
 use std::collections::HashSet;
@@ -31,12 +30,23 @@ pub struct TestBench {
 }
 
 struct TestbenchSignals {
-    value: Vec<Bus>,
+    value: Vec<Signal>,
+}
+
+impl From<&OutputFormat> for Signal {
+    fn from(o: &OutputFormat) -> Self {
+        Signal {
+            name: o.port_name.clone(),
+            width: crate::expr::GenericWidth::Terminal(crate::expr::Terminal::Num(
+                o.output_columns,
+            )),
+        }
+    }
 }
 
 impl From<&Vec<OutputFormat>> for TestbenchSignals {
     fn from(output_list: &Vec<OutputFormat>) -> Self {
-        let value = output_list.iter().map(|o| Bus::from(o)).collect();
+        let value = output_list.iter().map(|o| Signal::from(o)).collect();
         TestbenchSignals { value }
     }
 }
@@ -72,8 +82,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
         let name = test_bench.chip.name.clone() + "_tst";
         let generics = Vec::new();
         let ports = Vec::new();
-        let signals = Vec::new();
-
+        let signals = test_bench.signals.value.clone();
 
         // Dependencies of the test script are the chip being
         // tested + dependencies of the chip being tested.
@@ -109,7 +118,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
             ports,
             components,
             signals,
-            dependencies: HashSet::from([chip_vhdl])
+            dependencies: HashSet::from([chip_vhdl]),
         })
     }
 }
