@@ -6,7 +6,9 @@ use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, Statement, VhdlComponent, VhdlEntity};
+use crate::vhdl::{
+    keyw, BusVHDL, PortMappingVHDL, Process, Signal, Statement, VhdlComponent, VhdlEntity,
+};
 use crate::ChipHDL;
 
 use std::collections::HashSet;
@@ -111,6 +113,9 @@ impl TryFrom<&TestBench> for VhdlEntity {
             generic_params: Vec::new(),
             port_mappings,
         })];
+        statements.push(Statement::Process(Process {
+            statements: Vec::new(),
+        }));
 
         Ok(VhdlEntity {
             name,

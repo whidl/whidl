@@ -22,6 +22,11 @@ use crate::simulator::{gather_assignments, infer_widths, Bus};
 //#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Component(VhdlComponent),
+    Process(Process),
+}
+
+pub struct Process {
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +131,7 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Component(c) => write!(f, "{}", c),
+            Self::Process(p) => write!(f, "{}", p),
         }
     }
 }
@@ -224,6 +230,18 @@ impl fmt::Display for VhdlComponent {
             .join(", ");
 
         writeln!(f, "{} port map({});", keyw(&self.unit), mappings_vhdl)
+    }
+}
+
+impl fmt::Display for Process {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "process begin")?;
+
+        for s in &self.statements {
+            write!(f, "{}", s)?;
+        }
+
+        writeln!(f, "end process;")
     }
 }
 
