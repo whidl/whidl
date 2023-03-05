@@ -3,7 +3,7 @@ name: Publish docs to GitHub pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main", "publish-docs"]
+    branches: ["main"]
     paths:
       - 'docs/**'
 
@@ -33,9 +33,10 @@ jobs:
         uses: actions/checkout@v3
       - name: Build book
         run:
-          cargo install wasm-pack
-          wasm-pack build --target web
-          cd docs && npm install && npm run build
+          cargo install wasm-pack &&
+          wasm-pack build --target web &&
+          cd docs && npm install &&
+          npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Upload artifact
