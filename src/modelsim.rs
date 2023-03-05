@@ -73,7 +73,11 @@ impl TryFrom<&TestBench> for VhdlEntity {
         let generics = Vec::new();
         let ports = Vec::new();
         let signals = Vec::new();
-        let dependencies = HashSet::new();
+
+
+        // Dependencies of the test script are the chip being
+        // tested + dependencies of the chip being tested.
+        let chip_vhdl = VhdlEntity::try_from(&test_bench.chip)?;
 
         let mut port_mappings = Vec::new();
         for port in &test_bench.chip.ports {
@@ -97,7 +101,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
         components.push(VhdlComponent {
             unit: keyw(&test_bench.chip.name),
             generic_params: Vec::new(),
-            port_mappings: port_mappings,
+            port_mappings,
         });
 
         Ok(VhdlEntity {
@@ -106,7 +110,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
             ports,
             components,
             signals,
-            dependencies,
+            dependencies: HashSet::from([chip_vhdl])
         })
     }
 }
