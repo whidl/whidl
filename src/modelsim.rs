@@ -6,7 +6,7 @@ use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
-use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, VhdlComponent, VhdlEntity};
+use crate::vhdl::{keyw, BusVHDL, PortMappingVHDL, Signal, Statement, VhdlComponent, VhdlEntity};
 use crate::ChipHDL;
 
 use std::collections::HashSet;
@@ -106,17 +106,17 @@ impl TryFrom<&TestBench> for VhdlEntity {
         }
 
         // Only component is the chip being tested.
-        let mut components = vec![VhdlComponent {
+        let mut statements = vec![Statement::Component(VhdlComponent {
             unit: keyw(&test_bench.chip.name),
             generic_params: Vec::new(),
             port_mappings,
-        }];
+        })];
 
         Ok(VhdlEntity {
             name,
             generics,
             ports,
-            components,
+            statements,
             signals,
             dependencies: HashSet::from([chip_vhdl]),
         })

@@ -18,6 +18,12 @@ use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
 
 // ========= STRUCTS ========== //
+//#[derive(Clone)]
+//#[allow(clippy::large_enum_variant)]
+pub enum Statement {
+    Component(VhdlComponent),
+}
+
 #[derive(Debug, Clone)]
 pub struct Signal {
     pub name: String,
@@ -29,7 +35,7 @@ pub struct VhdlEntity {
     pub generics: Vec<String>,             // Declared generics.
     pub ports: Vec<VhdlPort>,              // Declared ports.
     pub signals: Vec<Signal>,              // Declared signals.
-    pub components: Vec<VhdlComponent>,    // Component instantiations.
+    pub statements: Vec<Statement>,        // VHDL statements.
     pub dependencies: HashSet<VhdlEntity>, // Entities for components.
 }
 impl Hash for VhdlEntity {
@@ -116,6 +122,14 @@ impl<'a> Cage<'a> for &Vec<VhdlPort> {}
 // The fmt::Display trait is used to convert VHDL abstract syntax nodes
 // to VHDL concrete syntax.
 
+impl fmt::Display for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Component(c) => write!(f, "{}", c),
+        }
+    }
+}
+
 impl fmt::Display for VhdlEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "library ieee;")?;
@@ -148,7 +162,7 @@ impl fmt::Display for VhdlEntity {
         }
 
         writeln!(f, "begin")?;
-        for (i, x) in self.components.iter().enumerate() {
+        for (i, x) in self.statements.iter().enumerate() {
             writeln!(f, "c{}: {}", i, x)?;
         }
 
@@ -316,12 +330,17 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             })
             .collect();
 
+        let statements: Vec<Statement> = vhdl_components
+            .into_iter()
+            .map(|c| Statement::Component(c))
+            .collect();
+
         Ok(VhdlEntity {
             name: chip_hdl.name.clone(),
             generics,
             ports,
             signals,
-            components: vhdl_components,
+            statements,
             dependencies,
         })
     }
