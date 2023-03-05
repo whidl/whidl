@@ -97,12 +97,11 @@ impl TryFrom<&TestBench> for VhdlEntity {
         }
 
         // Only component is the chip being tested.
-        let mut components = Vec::new();
-        components.push(VhdlComponent {
+        let mut components = vec![VhdlComponent {
             unit: keyw(&test_bench.chip.name),
             generic_params: Vec::new(),
             port_mappings,
-        });
+        }];
 
         Ok(VhdlEntity {
             name,
