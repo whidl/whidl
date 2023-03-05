@@ -1,6 +1,6 @@
 # WHiDL documentation
 
-This documentation is deployed to https://whidl.github.io
+This documentation is deployed to https://whidl.io
 
 ## Building the docs
 
