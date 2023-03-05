@@ -175,7 +175,7 @@ impl VhdlEntity {
 
 impl fmt::Display for Signal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} : ", self.name)?;
+        write!(f, "{} : ", keyw(&self.name))?;
         match self.width {
             GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
                 if port_width_num > 1 {
@@ -199,6 +199,7 @@ impl fmt::Display for Signal {
         }
     }
 }
+
 impl fmt::Display for VhdlComponent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mappings_vhdl: String = self
