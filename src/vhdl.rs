@@ -18,13 +18,47 @@ use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
 
 // ========= STRUCTS ========== //
-//#[derive(Clone)]
+#[derive(Clone)]
 //#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Component(VhdlComponent),
     Process(Process),
+    Assignment(AssignmentVHDL),
+    Assert(AssertVHDL),
+    Wait(WaitVHDL),
 }
 
+#[derive(Clone)]
+pub struct AssertVHDL {
+    pub signal_name: String,
+    pub signal_value: LiteralVHDL,
+    pub report_msg: String,
+}
+
+#[derive(Clone)]
+pub struct WaitVHDL {
+
+}
+
+#[derive(Clone)]
+pub enum SignalRhs {
+    Bus(BusVHDL),
+    Literal(LiteralVHDL),
+}
+
+#[derive(Clone)]
+/// Designates two wire names. The signal from the right wire will be assigned to the left.
+pub struct AssignmentVHDL {
+    pub left: BusVHDL,
+    pub right: SignalRhs,
+}
+
+#[derive(Clone)]
+pub struct LiteralVHDL {
+    pub values: Vec<bool>,
+}
+
+#[derive(Clone)]
 pub struct Process {
     pub statements: Vec<Statement>,
 }
@@ -57,6 +91,7 @@ impl Eq for VhdlEntity {}
 
 /// Abstract VHDL component.
 /// unit generic map (...) port map (...)
+#[derive(Clone)]
 pub struct VhdlComponent {
     pub unit: String,
     pub generic_params: Vec<GenericWidth>,
@@ -130,8 +165,44 @@ impl<'a> Cage<'a> for &Vec<VhdlPort> {}
 impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Component(c) => write!(f, "{}", c),
-            Self::Process(p) => write!(f, "{}", p),
+            Self::Component(x) => write!(f, "{}", x),
+            Self::Process(x) => write!(f, "{}", x),
+            Self::Assignment(x) => write!(f, "{}", x),
+            Self::Assert(x) => write!(f, "{}", x),
+            Self::Wait(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl fmt::Display for AssertVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "assert {} = {} report {};", self.signal_name, self.signal_value, self.report_msg)
+    }
+}
+
+impl fmt::Display for AssignmentVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} <= {};", self.left, self.right)
+    }
+}
+
+impl fmt::Display for WaitVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "wait for 10 ns;")
+    }
+}
+
+impl fmt::Display for LiteralVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"0000\"")
+    }
+}
+
+impl fmt::Display for SignalRhs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Bus(x) => write!(f, "{}", x),
+            Self::Literal(x) => write!(f, "{}", x)
         }
     }
 }
@@ -238,7 +309,7 @@ impl fmt::Display for Process {
         writeln!(f, "process begin")?;
 
         for s in &self.statements {
-            write!(f, "{}", s)?;
+            writeln!(f, "{}", s)?;
         }
 
         writeln!(f, "end process;")

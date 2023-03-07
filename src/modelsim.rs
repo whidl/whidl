@@ -7,7 +7,8 @@ use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::parse_test;
 use crate::vhdl::{
-    keyw, BusVHDL, PortMappingVHDL, Process, Signal, Statement, VhdlComponent, VhdlEntity,
+    keyw, AssertVHDL, AssignmentVHDL, BusVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
+    SignalRhs, Statement, VhdlComponent, VhdlEntity, WaitVHDL,
 };
 use crate::ChipHDL;
 
@@ -19,8 +20,6 @@ use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
 
-use bitvec::prelude::*;
-
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
     /// Name of chip being tested.
@@ -28,7 +27,7 @@ pub struct TestBench {
     /// Signals required for inputs/outputs.
     signals: TestbenchSignals,
     /// Individual steps to perform.
-    instructions: Vec<Instruction>,
+    instructions: Vec<Statement>,
 }
 
 struct TestbenchSignals {
@@ -53,26 +52,36 @@ impl From<&Vec<OutputFormat>> for TestbenchSignals {
     }
 }
 
-/// An single action for the simulator to perform.
-pub enum Instruction {
-    /// (port name, port value) set port name to port value.
-    Assign(String, BitVec<u16, Msb0>),
-    /// Wait for usize nanonseconds.
-    Wait(usize),
-    /// (signal name, value, report message)
-    Assert(String, BitVec<u16, Msb0>, String),
-}
-
 impl TryFrom<&TestScript> for TestBench {
     type Error = Box<dyn Error>;
 
     fn try_from(test_script: &TestScript) -> Result<Self, Box<dyn Error>> {
         let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
 
+        let mut instructions = Vec::new();
+        for step in &test_script.steps {
+            for inst in &step.instructions {
+                let stmt: Statement = match inst {
+                    crate::test_parser::Instruction::Set(port_name, port_value) => {
+                        Statement::Assignment(AssignmentVHDL {
+                            left: BusVHDL {
+                                name: port_name.clone(),
+                                start: None,
+                                end: None,
+                            },
+                            right: SignalRhs::Literal(LiteralVHDL { values: Vec::new() }),
+                        })
+                    }
+                    _ => crate::vhdl::Statement::Wait(WaitVHDL {}),
+                };
+                instructions.push(stmt);
+            }
+        }
+
         Ok(TestBench {
             chip: hdl,
             signals: TestbenchSignals::from(&test_script.output_list),
-            instructions: Vec::new(),
+            instructions,
         })
     }
 }
@@ -113,8 +122,15 @@ impl TryFrom<&TestBench> for VhdlEntity {
             generic_params: Vec::new(),
             port_mappings,
         })];
+
+        let mut process_statements = Vec::new();
+
+        for inst in &test_bench.instructions {
+            process_statements.push(inst.clone());
+        }
+
         statements.push(Statement::Process(Process {
-            statements: Vec::new(),
+            statements: process_statements,
         }));
 
         Ok(VhdlEntity {
