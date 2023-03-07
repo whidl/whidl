@@ -7,12 +7,11 @@
 use crate::busmap::BusMap;
 use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
-use crate::simulator::{Bus, Chip, Port, Simulator};
+use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_parser::*;
 use crate::test_scanner::TestScanner;
 
 use bitvec::prelude::*;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::{prelude::*, BufReader};
@@ -164,8 +163,17 @@ pub fn read_cmp(test_script: &TestScript) -> Result<Vec<BusMap>, Box<dyn Error>>
                 }));
             }
 
-            let port_width = test_script.output_list[i].output_columns;
+            let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+            let mut port_width = 0;
+            for p in hdl.ports {
+                if p.name.value == port_order[i] {
+                    if let crate::expr::GenericWidth::Terminal(crate::expr::Terminal::Num(w)) = p.width {
+                        port_width = w;
+                    }
+                }
+            }
             value.truncate(port_width);
+
             value.reverse();
             step_result.create_bus(&port_order[i], value.len()).unwrap();
             let bus = Bus {
