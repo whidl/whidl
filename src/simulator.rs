@@ -1011,7 +1011,7 @@ impl Chip {
                 let cached_outputs = input_cache.get(&cache_entry).unwrap();
 
                 // set output signals directly
-                for o in cached_outputs.signals() {
+                for o in cached_outputs.keys() {
                     let width = cached_outputs.get_width(&o).unwrap();
                     let bus = Bus {
                         name: o.clone(),

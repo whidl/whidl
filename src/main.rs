@@ -217,7 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .get_port_values_for_direction(PortDirection::In);
 
             // TODO: make it easier to get full bus out of busmap
-            for sn in inputs.signals() {
+            for sn in inputs.keys() {
                 let sig_width = inputs.get_width(&sn);
                 let usig_width = sig_width.as_ref().unwrap_or(&0);
                 let b = Bus {
@@ -242,7 +242,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 );
             }
             println!("Signals:");
-            for signal_name in &simulator.chip.signals.signals() {
+            for signal_name in &simulator.chip.signals.keys() {
                 let sig_width = match &simulator.chip.signals.get_width(signal_name) {
                     Some(w) => w.to_string(),
                     None => String::from("?"),

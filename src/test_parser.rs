@@ -153,7 +153,9 @@ impl<'a, 'b> TestParser<'a, 'b> {
         self.consume(TokenType::Comma)?;
 
         self.consume(TokenType::CompareTo)?;
-        let cmp_path = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        let cmp_path = test_path.parent().unwrap().join(PathBuf::from(
+            self.consume(TokenType::Identifier).unwrap().lexeme,
+        ));
         self.consume(TokenType::Comma)?;
 
         let output_list = self.output_list()?;

@@ -57,24 +57,40 @@ impl TryFrom<&TestScript> for TestBench {
 
     fn try_from(test_script: &TestScript) -> Result<Self, Box<dyn Error>> {
         let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+        let cmp = crate::test_script::read_cmp(test_script)?;
+        let mut cmp_i = cmp.iter();
 
         let mut instructions = Vec::new();
         for step in &test_script.steps {
             for inst in &step.instructions {
-                let stmt: Statement = match inst {
+                match inst {
                     crate::test_parser::Instruction::Set(port_name, port_value) => {
-                        Statement::Assignment(AssignmentVHDL {
+                        instructions.push(Statement::Assignment(AssignmentVHDL {
                             left: BusVHDL {
                                 name: port_name.clone(),
                                 start: None,
                                 end: None,
                             },
                             right: SignalRhs::Literal(LiteralVHDL { values: Vec::new() }),
-                        })
+                        }));
                     }
-                    _ => crate::vhdl::Statement::Wait(WaitVHDL {}),
+                    crate::test_parser::Instruction::Tick => {},
+                    crate::test_parser::Instruction::Tock => {},
+                    crate::test_parser::Instruction::Output => {
+                        let next_cmp = cmp_i.next().unwrap();
+                        for b in next_cmp.keys() {
+                            let next_bus = next_cmp.get_name(&b);
+                            instructions.push(Statement::Assert(AssertVHDL {
+                                signal_name: b,
+                                signal_value: LiteralVHDL::try_from(&next_bus)?,
+                                report_msg: String::from("generic report message"),
+                            }));
+                        }
+                    }
+                    crate::test_parser::Instruction::Eval => {
+                        instructions.push(crate::vhdl::Statement::Wait(WaitVHDL {}));
+                    }
                 };
-                instructions.push(stmt);
             }
         }
 

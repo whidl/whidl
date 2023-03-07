@@ -69,13 +69,10 @@ fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
 
 /// Reads a nand2tetris .cmp file and returns a vector of busmaps.
 /// Each busmap represents a single line in the .cmp file.
-fn read_cmp(
-    path: &PathBuf,
-    test_script: &TestScript,
-    ports: &HashMap<String, Port>,
-) -> Result<Vec<BusMap>, Box<dyn Error>> {
+pub fn read_cmp(test_script: &TestScript) -> Result<Vec<BusMap>, Box<dyn Error>> {
     let mut res: Vec<BusMap> = Vec::new();
-    let file = fs::File::open(path).unwrap_or_else(|_| panic!("No such cmp file {:?}", path));
+    let file = fs::File::open(&test_script.cmp_path)
+        .unwrap_or_else(|_| panic!("No such cmp file {:?}", &test_script.cmp_path));
     let buf = BufReader::new(file);
 
     let mut lines = buf.lines();
@@ -102,7 +99,7 @@ fn read_cmp(
     // two pipes and a single letter port name.
     if header.len() < 3 {
         return Err(Box::new(N2VError {
-            msg: format!("Header line for cmp file {:?} is too short. The header line is the first line of the .cmp file.", path),
+            msg: format!("Header line for cmp file {:?} is too short. The header line is the first line of the .cmp file.", test_script.cmp_path),
             kind: ErrorKind::IOError,
         }));
     }
@@ -124,7 +121,7 @@ fn read_cmp(
             return Err(Box::new(N2VError {
                 msg: format!(
                     "The line {} in {:?} is too short to be correct.",
-                    line, path
+                    line, test_script.cmp_path
                 ),
                 kind: ErrorKind::Other,
             }));
@@ -134,7 +131,7 @@ fn read_cmp(
             if i >= test_script.output_list.len() {
                 return Err(Box::new(N2VError {
                     msg: format!(
-                        "The line {} in {:?} contains more columns than the test script output-list.", line, path
+                        "The line {} in {:?} contains more columns than the test script output-list.", line, test_script.cmp_path
                     ),
                     kind: ErrorKind::Other,
                 }));
@@ -161,23 +158,14 @@ fn read_cmp(
                 return Err(Box::new(N2VError {
                     msg: format!(
                         "The line {} in {:?} contains more columns than the header line.",
-                        line, path
+                        line, test_script.cmp_path
                     ),
                     kind: ErrorKind::Other,
                 }));
             }
 
-            let portw = match ports.get(&port_order[i]) {
-                None => {
-                    return Err(Box::new(N2VError {
-                        msg: format!("CMP / HDL mismatch. The .cmp file refers to port `{}`, but the HDL file does not.", port_order[i]),
-                        kind: ErrorKind::Other,
-                    }));
-                }
-                Some(x) => x,
-            };
-
-            value.truncate(portw.width);
+            let port_width = test_script.output_list[i].output_columns;
+            value.truncate(port_width);
             value.reverse();
             step_result.create_bus(&port_order[i], value.len()).unwrap();
             let bus = Bus {
@@ -228,7 +216,7 @@ pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
         .parent()
         .unwrap()
         .join(&test_script.cmp_path);
-    let expected = read_cmp(&compare_path, &test_script, &simulator.chip.ports)?;
+    let expected = read_cmp(&test_script)?;
 
     let mut inputs = BusMap::new();
     let mut cmp_idx = 0;

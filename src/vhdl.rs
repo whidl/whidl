@@ -487,6 +487,14 @@ impl From<&BusVHDL> for BusHDL {
     }
 }
 
+impl From<&Vec<Option<bool>>> for LiteralVHDL {
+    fn from(v: &Vec<Option<bool>>) -> Self {
+        LiteralVHDL {
+            values: Vec::new()
+        }
+    }
+}
+
 impl From<&GenericPort> for VhdlPort {
     fn from(port: &GenericPort) -> Self {
         VhdlPort {

@@ -285,7 +285,8 @@ impl BusMap {
         self.buses.get(name).map(|x| x.len())
     }
 
-    pub fn signals(&self) -> Vec<String> {
+    ///! Returns a list of signal names in this busmap.
+    pub fn keys(&self) -> Vec<String> {
         self.buses.keys().cloned().collect()
     }
 }
