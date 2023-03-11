@@ -10,6 +10,7 @@ use crate::parser::*;
 use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_parser::*;
 use crate::test_scanner::TestScanner;
+use crate::expr::eval_expr_numeric;
 
 use bitvec::prelude::*;
 use std::error::Error;
@@ -18,6 +19,7 @@ use std::io::{prelude::*, BufReader};
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
+use std::collections::HashMap;
 
 /// Converts a test input (string + number system) to a bit vector.
 ///
@@ -164,14 +166,16 @@ pub fn read_cmp(test_script: &TestScript) -> Result<Vec<BusMap>, Box<dyn Error>>
             }
 
             let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+            let mut variables = HashMap::new();
+            for gv in 0..hdl.generic_decls.len() {
+                variables.insert(hdl.generic_decls[gv].value.clone(), test_script.generics[gv]);
+            }
+
+
             let mut port_width = 0;
             for p in hdl.ports {
                 if p.name.value == port_order[i] {
-                    if let crate::expr::GenericWidth::Terminal(crate::expr::Terminal::Num(w)) =
-                        p.width
-                    {
-                        port_width = w;
-                    }
+                    port_width = eval_expr_numeric(&p.width, &variables)?;
                 }
             }
             value.truncate(port_width);
@@ -222,10 +226,6 @@ pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
 
     let mut simulator = Simulator::new(chip);
 
-    let compare_path = PathBuf::from(test_script_path)
-        .parent()
-        .unwrap()
-        .join(&test_script.cmp_path);
     let expected = read_cmp(&test_script)?;
 
     let mut inputs = BusMap::new();

@@ -25,17 +25,13 @@ use clap::Subcommand;
 use object::{Object, ObjectSection};
 use parser::Parser;
 use scanner::Scanner;
-use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
 
 use crate::vhdl::write_quartus_project;
-
-use std::io::Write;
 
 #[derive(ArgParser)]
 #[clap(version)]
