@@ -42,14 +42,14 @@ pub struct WaitVHDL {}
 
 #[derive(Clone)]
 pub enum SignalRhs {
-    Bus(BusVHDL),
+    Bus(SliceVHDL),
     Literal(LiteralVHDL),
 }
 
 #[derive(Clone)]
 /// Designates two wire names. The signal from the right wire will be assigned to the left.
 pub struct AssignmentVHDL {
-    pub left: BusVHDL,
+    pub left: SliceVHDL,
     pub right: SignalRhs,
 }
 
@@ -98,10 +98,9 @@ pub struct VhdlComponent {
     pub port_mappings: Vec<PortMappingVHDL>,
 }
 
-/// BusVHDL represents the abstract VHDL syntax for an array.
 /// VHDL example: foo(3 downto 0) or bar(X downto 0)
 #[derive(Clone)]
-pub struct BusVHDL {
+pub struct SliceVHDL {
     /// The name of the signal. This is foo or bar in the example above.
     pub name: String,
 
@@ -115,8 +114,8 @@ pub struct BusVHDL {
 #[derive(Clone)]
 pub struct PortMappingVHDL {
     pub wire_name: String,
-    pub port: BusVHDL,
-    pub wire: BusVHDL,
+    pub port: SliceVHDL,
+    pub wire: SliceVHDL,
 }
 
 pub struct QuartusProject {
@@ -206,8 +205,8 @@ impl fmt::Display for LiteralVHDL {
             write!(f, "\"")?;
         }
 
-        for x in &self.values {
-            if *x {
+        for &x in self.values.iter().rev() {
+            if x {
                 write!(f, "1")?;
             } else {
                 write!(f, "0")?;
@@ -341,13 +340,17 @@ impl fmt::Display for Process {
 }
 
 /// Synthesizes VHDL for BusVHDL.
-impl std::fmt::Display for BusVHDL {
+impl std::fmt::Display for SliceVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Only write out downto syntax if this is an array.
         if self.start.is_some() {
             let start: &GenericWidth = self.start.as_ref().unwrap();
             let end: &GenericWidth = self.end.as_ref().unwrap();
-            write!(f, "{}({} downto {})", keyw(&self.name), start, end)
+            if start == end {
+                write!(f, "{}({})", keyw(&self.name), start)
+            } else {
+                write!(f, "{}({} downto {})", keyw(&self.name), start, end)
+            }
         } else {
             write!(f, "{}", keyw(&self.name))
         }
@@ -484,9 +487,9 @@ impl From<&VhdlComponent> for Component {
     }
 }
 
-impl From<&BusHDL> for BusVHDL {
+impl From<&BusHDL> for SliceVHDL {
     fn from(hdl: &BusHDL) -> Self {
-        BusVHDL {
+        SliceVHDL {
             name: hdl.name.clone(),
             start: hdl.start.clone(),
             end: hdl.end.clone(),
@@ -494,19 +497,13 @@ impl From<&BusHDL> for BusVHDL {
     }
 }
 
-impl From<&BusVHDL> for BusHDL {
-    fn from(vhdl: &BusVHDL) -> Self {
+impl From<&SliceVHDL> for BusHDL {
+    fn from(vhdl: &SliceVHDL) -> Self {
         BusHDL {
             name: vhdl.name.clone(),
             start: vhdl.start.clone(),
             end: vhdl.end.clone(),
         }
-    }
-}
-
-impl From<&Vec<Option<bool>>> for LiteralVHDL {
-    fn from(v: &Vec<Option<bool>>) -> Self {
-        LiteralVHDL { values: Vec::new() }
     }
 }
 
@@ -524,8 +521,8 @@ impl From<&PortMappingHDL> for PortMappingVHDL {
     fn from(pm: &PortMappingHDL) -> Self {
         PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
-            port: BusVHDL::from(&pm.port),
-            wire: BusVHDL::from(&pm.wire),
+            port: SliceVHDL::from(&pm.port),
+            wire: SliceVHDL::from(&pm.wire),
         }
     }
 }
@@ -1063,7 +1060,6 @@ end architecture arch;
 
         push_parts(&next_hdl.parts, &mut worklist, &mut done);
     }
-
 
     Ok(())
 }

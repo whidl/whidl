@@ -8,7 +8,7 @@ use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::{bitvec_to_vecbool, parse_test, test_input_to_bitvec};
 use crate::vhdl::write_quartus_project;
 use crate::vhdl::{
-    keyw, AssertVHDL, AssignmentVHDL, BusVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
+    keyw, AssertVHDL, AssignmentVHDL, SliceVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
     SignalRhs, Statement, VhdlComponent, VhdlEntity, WaitVHDL,
 };
 use crate::ChipHDL;
@@ -81,7 +81,7 @@ impl TryFrom<&TestScript> for TestBench {
                             .collect();
 
                         instructions.push(Statement::Assignment(AssignmentVHDL {
-                            left: BusVHDL {
+                            left: SliceVHDL {
                                 name: port_name.clone(),
                                 start: None,
                                 end: None,
@@ -104,15 +104,17 @@ impl TryFrom<&TestScript> for TestBench {
                             //
                             // FIXME:
                             let lvhdl_values: Vec<bool> =
-                                next_bus.iter().map(|x| x.unwrap()).collect();
+                                next_bus.iter().rev().map(|x| x.unwrap()).collect();
                             let lvhdl = LiteralVHDL {
                                 values: lvhdl_values,
                             };
 
+                            let report_msg = format!("Test failure {}", b);
+
                             instructions.push(Statement::Assert(AssertVHDL {
                                 signal_name: b,
                                 signal_value: lvhdl,
-                                report_msg: String::from("generic report message"),
+                                report_msg,
                             }));
                         }
                     }
@@ -148,12 +150,12 @@ impl TryFrom<&TestBench> for VhdlEntity {
         for port in &test_bench.chip.ports {
             port_mappings.push(PortMappingVHDL {
                 wire_name: port.name.value.clone(),
-                port: BusVHDL {
+                port: SliceVHDL {
                     name: port.name.value.clone(),
                     start: None,
                     end: None,
                 },
-                wire: BusVHDL {
+                wire: SliceVHDL {
                     name: port.name.value.clone(),
                     start: None,
                     end: None,
@@ -329,4 +331,11 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_dmux4way() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/DMux4Way.tst"),
+            "work.dmux4way_tst",
+        );
+    }
 }
