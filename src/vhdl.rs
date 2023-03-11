@@ -196,7 +196,12 @@ impl fmt::Display for WaitVHDL {
 
 impl fmt::Display for LiteralVHDL {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "\"")?;
+        if self.values.len() == 1 {
+            write!(f, "\'")?;
+        } else {
+            write!(f, "\"")?;
+        }
+
         for x in &self.values {
             if *x {
                 write!(f, "1")?;
@@ -204,7 +209,12 @@ impl fmt::Display for LiteralVHDL {
                 write!(f, "0")?;
             }
         }
-        write!(f, "\"")
+
+        if self.values.len() == 1 {
+            write!(f, "\'")
+        } else {
+            write!(f, "\"")
+        }
     }
 }
 
@@ -393,10 +403,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         let vhdl_components = generate_components(chip_hdl);
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
-        let components: Vec<Component> = vhdl_components
-            .iter()
-            .map(|vc| Component::from(vc))
-            .collect();
+        let components: Vec<Component> = vhdl_components.iter().map(Component::from).collect();
 
         for port in &chip_hdl.ports {
             ports.push(VhdlPort::from(port));
@@ -431,7 +438,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
         let statements: Vec<Statement> = vhdl_components
             .into_iter()
-            .map(|c| Statement::Component(c))
+            .map(Statement::Component)
             .collect();
 
         Ok(VhdlEntity {
@@ -450,7 +457,7 @@ impl From<&Component> for VhdlComponent {
         let port_mappings: Vec<PortMappingVHDL> = component
             .mappings
             .iter()
-            .map(|x| PortMappingVHDL::from(x))
+            .map(PortMappingVHDL::from)
             .collect();
 
         VhdlComponent {
@@ -471,7 +478,7 @@ impl From<&VhdlComponent> for Component {
             mappings: vc
                 .port_mappings
                 .iter()
-                .map(|x| PortMappingHDL::from(x))
+                .map(PortMappingHDL::from)
                 .collect(),
         }
     }

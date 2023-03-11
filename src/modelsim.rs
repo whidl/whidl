@@ -47,7 +47,7 @@ impl From<&OutputFormat> for Signal {
 
 impl From<&Vec<OutputFormat>> for TestbenchSignals {
     fn from(output_list: &Vec<OutputFormat>) -> Self {
-        let value = output_list.iter().map(|o| Signal::from(o)).collect();
+        let value = output_list.iter().map(Signal::from).collect();
         TestbenchSignals { value }
     }
 }
@@ -94,9 +94,22 @@ impl TryFrom<&TestScript> for TestBench {
                         let next_cmp = cmp_i.next().unwrap();
                         for b in next_cmp.keys() {
                             let next_bus = next_cmp.get_name(&b);
+
+                            // For some reason cannot impl try_from because
+                            // it collides with core try_from.
+                            // https://github.com/rust-lang/rust/issues/50133
+                            //
+                            // So we just make the LiteralVHDL here.
+                            //
+                            // FIXME:
+                            let lvhdl_values : Vec<bool> = next_bus.iter().map(|x| x.unwrap()).collect();
+                            let lvhdl = LiteralVHDL {
+                                values: lvhdl_values,
+                            };
+                            
                             instructions.push(Statement::Assert(AssertVHDL {
                                 signal_name: b,
-                                signal_value: LiteralVHDL::try_from(&next_bus)?,
+                                signal_value: lvhdl,
                                 report_msg: String::from("generic report message"),
                             }));
                         }
