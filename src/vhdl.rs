@@ -177,7 +177,9 @@ impl fmt::Display for AssertVHDL {
         write!(
             f,
             "assert {} = {} report \"{}\";",
-            self.signal_name, self.signal_value, self.report_msg
+            keyw(&self.signal_name),
+            self.signal_value,
+            self.report_msg
         )
     }
 }
@@ -475,11 +477,7 @@ impl From<&VhdlComponent> for Component {
         Component {
             name: Identifier::from(&vc.unit[..]),
             generic_params: vc.generic_params.clone(),
-            mappings: vc
-                .port_mappings
-                .iter()
-                .map(PortMappingHDL::from)
-                .collect(),
+            mappings: vc.port_mappings.iter().map(PortMappingHDL::from).collect(),
         }
     }
 }
