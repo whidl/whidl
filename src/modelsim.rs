@@ -6,6 +6,7 @@ use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::{bitvec_to_vecbool, parse_test, test_input_to_bitvec};
+use crate::vhdl::write_quartus_project;
 use crate::vhdl::{
     keyw, AssertVHDL, AssignmentVHDL, BusVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
     SignalRhs, Statement, VhdlComponent, VhdlEntity, WaitVHDL,
@@ -238,7 +239,8 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     let chip_vhdl = VhdlEntity::try_from(&hdl)?;
 
     let quartus_dir = Path::new(&output_dir);
-    let _ = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
+    write_quartus_project(&project)?;
 
     Ok(())
 }
@@ -274,7 +276,7 @@ mod test {
 
         // 2. Run Modelsim and assert that all tests passed.
         let status = Command::new("vcom")
-            .args(["And.tst.vhdl"])
+            .args(["*.vhdl"])
             .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vcom");

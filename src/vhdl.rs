@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::fmt::Write;
+use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::{gather_assignments, infer_widths, Bus};
+use crate::Scanner;
 
 // ========= STRUCTS ========== //
 #[derive(Clone)]
@@ -992,12 +994,76 @@ begin
 x0: DFF port map (d => in_n2v, clrn => '1', prn => '1', q => out_n2v);
 end architecture arch;
 "#;
-    let mut file = File::create(qp.project_dir.join("dff.vhdl"))?;
-    file.write_all(dff_vhdl.as_bytes())?;
+
+    //let mut file = File::create(qp.project_dir.join("dff.vhdl"))?;
+    //file.write_all(dff_vhdl.as_bytes())?;
 
     tcl.push_str("project_close");
     let mut file = File::create(qp.project_dir.join("project.tcl"))?;
     file.write_all(tcl.as_bytes())?;
+
+    // Write the already-parsed main chip.
+    let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
+    let mut file = File::create(qp.project_dir.join(&chip_filename))?;
+    file.write_all(format!("{}", qp.chip_vhdl).as_bytes())?;
+
+    // The chip names we have already processed. We only need to
+    // convert each chip type once.
+    let mut done: HashSet<String> = HashSet::new();
+    done.insert(String::from("Nand"));
+    done.insert(String::from("Dff"));
+
+    // Recursively parse and write all dependency components.
+    // Worklist is set of chip names that we need to convert from HDL to VHDL.
+    let mut worklist: Vec<String> = Vec::new();
+
+    // Pushes parts onto the worklist.
+    fn push_parts(parts: &Vec<Part>, worklist: &mut Vec<String>, done: &mut HashSet<String>) {
+        for part in parts {
+            match part {
+                Part::Component(c) => {
+                    if !done.contains(&c.name.value) {
+                        done.insert(c.name.value.clone());
+                        worklist.push(c.name.value.clone());
+                    }
+                }
+                Part::Loop(l) => {
+                    for c in &l.body {
+                        if !done.contains(&c.name.value) {
+                            done.insert(c.name.value.clone());
+                            worklist.push(c.name.value.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Seed the worklist with all components of the top-level entity.
+    push_parts(&qp.chip_hdl.parts, &mut worklist, &mut done);
+
+    let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
+
+    while !worklist.is_empty() {
+        let next_chip_name = worklist.pop().unwrap();
+        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
+
+        let next_source_code = fs::read_to_string(&next_hdl_path)?;
+        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
+        let mut next_parser = Parser::new(&mut next_scanner, qp.chip_hdl.provider.clone());
+        let next_hdl = next_parser.parse()?;
+
+        // Convert HDL to VHDL (VHDl synthesis).
+        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
+
+        let next_filename = next_chip_name.clone() + ".vhdl";
+        let mut next_file = File::create(qp.project_dir.join(&next_filename))?;
+        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
+
+        push_parts(&next_hdl.parts, &mut worklist, &mut done);
+    }
+
 
     Ok(())
 }
