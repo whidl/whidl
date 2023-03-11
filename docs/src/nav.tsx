@@ -44,7 +44,7 @@ export default function Nav() {
             <TreeItem nodeId="generics" label="Generics" />
             <TreeItem nodeId="loops" label="Loops" />
             <TreeItem nodeId="usage" label="Using whidl" />
-            <TreeItem nodeId="truth-tables" label="Truth Table Generator" />
+            <TreeItem nodeId="truth-tables" label="HDL Simulator" />
         </TreeView>
     );
 }

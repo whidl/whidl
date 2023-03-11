@@ -2,18 +2,20 @@ import React, { useEffect, useState, useRef } from "react";
 import Grid from "@mui/material/Grid";
 import init, { full_table } from "@whidl/whidl";
 import Alert, { AlertColor } from "@mui/material/Alert";
-import TextField from "@mui/material/TextField";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-
 import * as monaco from 'monaco-editor';
 import Editor from "@monaco-editor/react";
 
-let chips = {
+interface ChipsObj {
+  [key: string]: any
+}
+
+let chips: ChipsObj = {
   And: 
   `/*
 Parts available for use: 
@@ -21,6 +23,7 @@ Parts available for use:
   And(a, b, out) 
   Not(in, out)
   Or (a, b, out)
+  Xor(a, b, out)
 Chip names are case sensitive.
 Only one chip can be created in this text field.
 */
@@ -84,10 +87,10 @@ CHIP Mux4Way {
 
 };
 
+
 export default function TruthTableGenerator() {
   // This is only created because a null reference throws an error
   const editor_ref = useRef(monaco.editor.create(document.createElement("editor")));
-
 
   type option_bool = boolean | null;
 
@@ -140,22 +143,20 @@ export default function TruthTableGenerator() {
   }
 
   return (
-    <Grid container spacing={{ xs: 2, md: 3}}>
-      <Grid item xs={6} sx={{
-        left:1
-      }}>
+    <Grid container spacing={2} sx={{width: '100%'}}>
+      <Grid item xs={8} md={8} lg={8}>
         <Editor
           height="70vh"
-          width="60vh"
+          width="80vh"
           theme="vs-dark"
           onMount={handleEditorMount}
           onChange={(s) => { changeCode(editor_ref.current.getValue()) }}
           defaultValue={chips["And"]}
         />
       </Grid>
-      <Grid item xs={6} spacing={3}>
+      <Grid item xs={4} md={4} lg={4}>
         <TableContainer sx={{ maxHeight: 440 }}>
-          <Table size="small" stickyHeader>
+          <Table size="medium" stickyHeader>
             <TableHead>
               <TableRow>
                 {ans[0].map((port_name, index) => {

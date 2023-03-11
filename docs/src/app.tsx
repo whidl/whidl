@@ -126,7 +126,7 @@ export default function App() {
 
                     </Drawer>
                     <Box component="main" sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', mt: '64px', mb: '32px', ml: 4, mr: 4 }}>
-                        <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: contentWidth }}>
+                        <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: 'false' }}>
                             <Outlet context={outletContext} />
                         </Box>
                     </Box>
