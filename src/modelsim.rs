@@ -324,6 +324,14 @@ mod test {
     }
 
     #[test]
+    fn test_mux() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Mux.tst"),
+            "work.Mux_tst",
+        );
+    }
+
+    #[test]
     fn test_dmux() {
         run_test(
             PathBuf::from("resources/tests/nand2tetris/solutions/DMux.tst"),
@@ -346,4 +354,37 @@ mod test {
             "work.dmux8way_tst",
         );
     }
+
+    #[test]
+    fn test_half_adder() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/HalfAdder.tst"),
+            "work.HalfAdder_tst",
+        );
+    }
+
+    #[test]
+    fn test_full_adder() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/FullAdder.tst"),
+            "work.FullAdder_tst",
+        );
+    }
+
+    #[test]
+    fn test_not16() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Not16.tst"),
+            "work.Not16_tst",
+        );
+    }
+
+    #[test]
+    fn test_or8way() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Or8Way.tst"),
+            "work.or8way_tst",
+        );
+    }
+
 }
