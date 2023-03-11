@@ -176,7 +176,7 @@ impl fmt::Display for Statement {
 
 impl fmt::Display for AssertVHDL {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "assert {} = {} report {};", self.signal_name, self.signal_value, self.report_msg)
+        write!(f, "assert {} = {} report \"{}\";", self.signal_name, self.signal_value, self.report_msg)
     }
 }
 
