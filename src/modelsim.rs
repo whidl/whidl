@@ -312,4 +312,21 @@ mod test {
             "work.not_tst",
         );
     }
+
+    #[test]
+    fn test_xor() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Xor.tst"),
+            "work.xor_tst",
+        );
+    }
+
+    #[test]
+    fn test_dmux() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/DMux.tst"),
+            "work.dmux_tst",
+        );
+    }
+
 }
