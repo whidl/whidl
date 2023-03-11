@@ -264,6 +264,14 @@ mod test {
             panic!();
         }
 
+        // Create the work library.
+        let status = Command::new("vlib")
+            .args(["work"])
+            .current_dir(&temp_dir)
+            .status()
+            .expect("Failed to execute vlib");
+        assert!(status.success());
+
         // 2. Run Modelsim and assert that all tests passed.
         let status = Command::new("vcom")
             .args(["And.tst.vhdl"])
@@ -272,8 +280,10 @@ mod test {
             .expect("Failed to execute vcom");
         assert!(status.success());
 
+        // FIXME: How to pass in length of test?
         let status = Command::new("vsim")
-            .args(["-c", "And.tst.vhdl", "-do", "\"run -all\""])
+            .args(["-c", "work.and_tst", "-do", "\"run 100\"; quit"])
+            .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vsim");
         assert!(status.success());
