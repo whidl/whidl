@@ -281,11 +281,13 @@ mod test {
         assert!(status.success());
 
         // FIXME: How to pass in length of test?
-        let status = Command::new("vsim")
-            .args(["-c", "work.and_tst", "-do", "\"run -all 100ns\"; quit"])
+        let output = Command::new("vsim")
+            .args(["-c", "work.and_tst", "-do", "run 100ns; quit"])
             .current_dir(&temp_dir)
-            .status()
+            .output()
             .expect("Failed to execute vsim");
-        assert!(status.success());
+        let output_str = String::from_utf8(output.stdout).unwrap();
+        println!("{}", output_str);
+        assert!(output_str.contains("Errors: 0"));
     }
 }
