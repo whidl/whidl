@@ -333,4 +333,45 @@ mod test {
         println!("{}", output_str);
         assert!(output_str.contains("Errors: 0"));
     }
+
+    #[test]
+    // Test that Modelsim simulation passes for And chip.
+    fn test_not() {
+        // Synthesize Modelsim test bench for input .tst script
+        let tst_path = PathBuf::from("resources/tests/nand2tetris/solutions/Not.tst");
+        let temp_dir = tempdir().unwrap();
+        println!("Temp dir: {}", temp_dir.path().display());
+
+        let synth_result = synth_vhdl_test(temp_dir.path(), &tst_path);
+        if synth_result.is_err() {
+            println!("{}", synth_result.unwrap_err());
+            panic!();
+        }
+
+        // Create the work library.
+        let status = Command::new("vlib")
+            .args(["work"])
+            .current_dir(&temp_dir)
+            .status()
+            .expect("Failed to execute vlib");
+        assert!(status.success());
+
+        // 2. Run Modelsim and assert that all tests passed.
+        let status = Command::new("vcom")
+            .args(["*.vhdl"])
+            .current_dir(&temp_dir)
+            .status()
+            .expect("Failed to execute vcom");
+        assert!(status.success());
+
+        // FIXME: How to pass in length of test?
+        let output = Command::new("vsim")
+            .args(["-c", "work.not_tst", "-do", "run 100ns; quit"])
+            .current_dir(&temp_dir)
+            .output()
+            .expect("Failed to execute vsim");
+        let output_str = String::from_utf8(output.stdout).unwrap();
+        println!("{}", output_str);
+        assert!(output_str.contains("Errors: 0"));
+    }
 }
