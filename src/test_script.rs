@@ -23,7 +23,7 @@ use std::rc::Rc;
 ///
 /// The bit vector is the binary representation of the input value.
 /// The most significant bit comes first, and the least significant bit last.
-fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
+pub fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     match input.number_system {
         NumberSystem::Decimal => {
             let num: i16 = input.value.parse().unwrap();
@@ -58,7 +58,7 @@ fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
 
 /// Converts a bitvec to a vector of option bools. This conversion is
 /// necessary because the simulator uses `Vec<Option<bool>>` to represent inputs.
-fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
+pub fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
     let mut res = Vec::new();
     for bit in bv {
         res.push(Some(bit));
@@ -167,7 +167,9 @@ pub fn read_cmp(test_script: &TestScript) -> Result<Vec<BusMap>, Box<dyn Error>>
             let mut port_width = 0;
             for p in hdl.ports {
                 if p.name.value == port_order[i] {
-                    if let crate::expr::GenericWidth::Terminal(crate::expr::Terminal::Num(w)) = p.width {
+                    if let crate::expr::GenericWidth::Terminal(crate::expr::Terminal::Num(w)) =
+                        p.width
+                    {
                         port_width = w;
                     }
                 }

@@ -5,7 +5,7 @@ use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
-use crate::test_script::parse_test;
+use crate::test_script::{bitvec_to_vecbool, parse_test, test_input_to_bitvec};
 use crate::vhdl::{
     keyw, AssertVHDL, AssignmentVHDL, BusVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
     SignalRhs, Statement, VhdlComponent, VhdlEntity, WaitVHDL,
@@ -65,17 +65,31 @@ impl TryFrom<&TestScript> for TestBench {
             for inst in &step.instructions {
                 match inst {
                     crate::test_parser::Instruction::Set(port_name, port_value) => {
+                        // bitvec_to_vecbool
+                        let tib = test_input_to_bitvec(port_value);
+                        let btv = bitvec_to_vecbool(tib);
+
+                        // FIXME: remove unwrap
+                        // FIXME: only works for binary system where length of string
+                        //        is width of port.
+                        let fixme: Vec<bool> = btv
+                            .iter()
+                            .rev()
+                            .take(port_value.value.len())
+                            .map(|x| x.unwrap())
+                            .collect();
+
                         instructions.push(Statement::Assignment(AssignmentVHDL {
                             left: BusVHDL {
                                 name: port_name.clone(),
                                 start: None,
                                 end: None,
                             },
-                            right: SignalRhs::Literal(LiteralVHDL { values: Vec::new() }),
+                            right: SignalRhs::Literal(LiteralVHDL { values: fixme }),
                         }));
                     }
-                    crate::test_parser::Instruction::Tick => {},
-                    crate::test_parser::Instruction::Tock => {},
+                    crate::test_parser::Instruction::Tick => {}
+                    crate::test_parser::Instruction::Tock => {}
                     crate::test_parser::Instruction::Output => {
                         let next_cmp = cmp_i.next().unwrap();
                         for b in next_cmp.keys() {

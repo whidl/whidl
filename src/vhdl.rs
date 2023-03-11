@@ -36,9 +36,7 @@ pub struct AssertVHDL {
 }
 
 #[derive(Clone)]
-pub struct WaitVHDL {
-
-}
+pub struct WaitVHDL {}
 
 #[derive(Clone)]
 pub enum SignalRhs {
@@ -176,7 +174,11 @@ impl fmt::Display for Statement {
 
 impl fmt::Display for AssertVHDL {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "assert {} = {} report \"{}\";", self.signal_name, self.signal_value, self.report_msg)
+        write!(
+            f,
+            "assert {} = {} report \"{}\";",
+            self.signal_name, self.signal_value, self.report_msg
+        )
     }
 }
 
@@ -194,7 +196,15 @@ impl fmt::Display for WaitVHDL {
 
 impl fmt::Display for LiteralVHDL {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "\"0000\"")
+        write!(f, "\"")?;
+        for x in &self.values {
+            if *x {
+                write!(f, "1")?;
+            } else {
+                write!(f, "0")?;
+            }
+        }
+        write!(f, "\"")
     }
 }
 
@@ -202,7 +212,7 @@ impl fmt::Display for SignalRhs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Bus(x) => write!(f, "{}", x),
-            Self::Literal(x) => write!(f, "{}", x)
+            Self::Literal(x) => write!(f, "{}", x),
         }
     }
 }
@@ -489,9 +499,7 @@ impl From<&BusVHDL> for BusHDL {
 
 impl From<&Vec<Option<bool>>> for LiteralVHDL {
     fn from(v: &Vec<Option<bool>>) -> Self {
-        LiteralVHDL {
-            values: Vec::new()
-        }
+        LiteralVHDL { values: Vec::new() }
     }
 }
 
