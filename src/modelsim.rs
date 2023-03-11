@@ -338,4 +338,12 @@ mod test {
             "work.dmux4way_tst",
         );
     }
+
+    #[test]
+    fn test_dmux8way() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/DMux8Way.tst"),
+            "work.dmux8way_tst",
+        );
+    }
 }
