@@ -282,7 +282,7 @@ mod test {
 
         // FIXME: How to pass in length of test?
         let status = Command::new("vsim")
-            .args(["-c", "work.and_tst", "-do", "\"run 100\"; quit"])
+            .args(["-c", "work.and_tst", "-do", "\"run -all 100ns\"; quit"])
             .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vsim");
