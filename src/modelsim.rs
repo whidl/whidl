@@ -102,11 +102,12 @@ impl TryFrom<&TestScript> for TestBench {
                             // So we just make the LiteralVHDL here.
                             //
                             // FIXME:
-                            let lvhdl_values : Vec<bool> = next_bus.iter().map(|x| x.unwrap()).collect();
+                            let lvhdl_values: Vec<bool> =
+                                next_bus.iter().map(|x| x.unwrap()).collect();
                             let lvhdl = LiteralVHDL {
                                 values: lvhdl_values,
                             };
-                            
+
                             instructions.push(Statement::Assert(AssertVHDL {
                                 signal_name: b,
                                 signal_value: lvhdl,
@@ -269,7 +270,12 @@ mod test {
             .current_dir(&temp_dir)
             .status()
             .expect("Failed to execute vcom");
+        assert!(status.success());
 
+        let status = Command::new("vsim")
+            .args(["-c", "And.tst.vhdl", "-do", "\"run -all\""])
+            .status()
+            .expect("Failed to execute vsim");
         assert!(status.success());
     }
 }
