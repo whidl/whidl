@@ -387,4 +387,11 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_add16() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Add16.tst"),
+            "work.Add16_tst",
+        );
+    }
 }

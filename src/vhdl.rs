@@ -263,7 +263,7 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "begin")?;
         for (i, x) in self.statements.iter().enumerate() {
-            writeln!(f, "c{}: {}", i, x)?;
+            writeln!(f, "cn2v{}: {}", i, x)?;
         }
 
         writeln!(f, "end arch;")?;
