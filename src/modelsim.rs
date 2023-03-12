@@ -7,10 +7,8 @@ use crate::scanner::Scanner;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::{bitvec_to_vecbool, parse_test, test_input_to_bitvec};
 use crate::vhdl::write_quartus_project;
-use crate::vhdl::{
-    keyw, AssertVHDL, AssignmentVHDL, SliceVHDL, LiteralVHDL, PortMappingVHDL, Process, Signal,
-    SignalRhs, Statement, VhdlComponent, VhdlEntity, WaitVHDL,
-};
+use crate::vhdl::*;
+use crate::vhdl::SignalRhs::*;
 use crate::ChipHDL;
 
 use std::collections::HashSet;
@@ -155,11 +153,11 @@ impl TryFrom<&TestBench> for VhdlEntity {
                     start: None,
                     end: None,
                 },
-                wire: SliceVHDL {
+                wire: Bus(SliceVHDL {
                     name: port.name.value.clone(),
                     start: None,
                     end: None,
-                },
+                }),
             });
         }
 
@@ -392,6 +390,14 @@ mod test {
         run_test(
             PathBuf::from("resources/tests/nand2tetris/solutions/Add16.tst"),
             "work.Add16_tst",
+        );
+    }
+
+    #[test]
+    fn test_alu() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/ALU.tst"),
+            "work.ALU_tst",
         );
     }
 }

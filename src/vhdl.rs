@@ -16,10 +16,31 @@ use std::path::PathBuf;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
-use crate::simulator::{gather_assignments, infer_widths, Bus};
+use crate::simulator::{gather_assignments, infer_widths};
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
+pub struct VhdlEntity {
+    pub name: String,                      // The name of this chip.
+    pub generics: Vec<String>,             // Declared generics.
+    pub ports: Vec<VhdlPort>,              // Declared ports.
+    pub signals: Vec<Signal>,              // Declared signals.
+    pub statements: Vec<Statement>,        // VHDL statements.
+    pub dependencies: HashSet<VhdlEntity>, // Entities for components.
+}
+impl Hash for VhdlEntity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+impl PartialEq for VhdlEntity {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for VhdlEntity {}
+
+
 #[derive(Clone)]
 //#[allow(clippy::large_enum_variant)]
 pub enum Statement {
@@ -44,6 +65,7 @@ pub struct WaitVHDL {}
 pub enum SignalRhs {
     Bus(SliceVHDL),
     Literal(LiteralVHDL),
+    TrueFalse(bool),
 }
 
 #[derive(Clone)]
@@ -69,25 +91,6 @@ pub struct Signal {
     pub width: GenericWidth,
 }
 
-pub struct VhdlEntity {
-    pub name: String,                      // The name of this chip.
-    pub generics: Vec<String>,             // Declared generics.
-    pub ports: Vec<VhdlPort>,              // Declared ports.
-    pub signals: Vec<Signal>,              // Declared signals.
-    pub statements: Vec<Statement>,        // VHDL statements.
-    pub dependencies: HashSet<VhdlEntity>, // Entities for components.
-}
-impl Hash for VhdlEntity {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-impl PartialEq for VhdlEntity {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-impl Eq for VhdlEntity {}
 
 /// Abstract VHDL component.
 /// unit generic map (...) port map (...)
@@ -115,7 +118,7 @@ pub struct SliceVHDL {
 pub struct PortMappingVHDL {
     pub wire_name: String,
     pub port: SliceVHDL,
-    pub wire: SliceVHDL,
+    pub wire: SignalRhs,
 }
 
 pub struct QuartusProject {
@@ -226,6 +229,13 @@ impl fmt::Display for SignalRhs {
         match self {
             Self::Bus(x) => write!(f, "{}", x),
             Self::Literal(x) => write!(f, "{}", x),
+            Self::TrueFalse(x) => {
+                if *x {
+                    write!(f, "(others => '0')")
+                } else {
+                    write!(f, "(others => '1')")
+                }
+            }
         }
     }
 }
@@ -349,7 +359,7 @@ impl std::fmt::Display for SliceVHDL {
             if start == end {
                 write!(f, "{}({})", keyw(&self.name), start)
             } else {
-                write!(f, "{}({} downto {})", keyw(&self.name), start, end)
+                write!(f, "{}({} downto {})", keyw(&self.name), end, start)
             }
         } else {
             write!(f, "{}", keyw(&self.name))
@@ -507,6 +517,36 @@ impl From<&SliceVHDL> for BusHDL {
     }
 }
 
+impl From<&SignalRhs> for BusHDL {
+    fn from(vhdl: &SignalRhs) -> Self {
+        match vhdl {
+            SignalRhs::Bus(slice) => BusHDL {
+                name: slice.name.clone(),
+                start: slice.start.clone(),
+                end: slice.end.clone(),
+            },
+            SignalRhs::Literal(l) => {
+                panic!("Not yet implemented.");
+            }
+            SignalRhs::TrueFalse(b) => {
+                if *b {
+                    BusHDL {
+                        name: String::from("false"),
+                        start: None,
+                        end: None,
+                    }
+                } else {
+                    BusHDL {
+                        name: String::from("true"),
+                        start: None,
+                        end: None,
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl From<&GenericPort> for VhdlPort {
     fn from(port: &GenericPort) -> Self {
         VhdlPort {
@@ -519,10 +559,19 @@ impl From<&GenericPort> for VhdlPort {
 
 impl From<&PortMappingHDL> for PortMappingVHDL {
     fn from(pm: &PortMappingHDL) -> Self {
+        let wire;
+        if &pm.wire.name == "true" {
+            wire = SignalRhs::TrueFalse(true)
+        } else if &pm.wire.name == "false" {
+            wire = SignalRhs::TrueFalse(false)
+        } else {
+            wire = SignalRhs::Bus(SliceVHDL::from(&pm.wire))
+        }
+
         PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
             port: SliceVHDL::from(&pm.port),
-            wire: SliceVHDL::from(&pm.wire),
+            wire,
         }
     }
 }
@@ -530,7 +579,7 @@ impl From<&PortMappingHDL> for PortMappingVHDL {
 impl From<&PortMappingVHDL> for PortMappingHDL {
     fn from(pm: &PortMappingVHDL) -> Self {
         PortMappingHDL {
-            wire_ident: Identifier::from(&pm.wire.name.clone()[..]),
+            wire_ident: Identifier::from(&pm.wire_name.clone()[..]),
             port: BusHDL::from(&pm.port),
             wire: BusHDL::from(&pm.wire),
         }
