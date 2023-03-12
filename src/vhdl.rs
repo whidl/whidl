@@ -65,9 +65,8 @@ pub struct WaitVHDL {}
 
 #[derive(Clone)]
 pub enum SignalRhs {
-    Bus(SliceVHDL),
+    Slice(SliceVHDL),
     Literal(LiteralVHDL),
-    TrueFalse(bool),
 }
 
 #[derive(Clone)]
@@ -228,15 +227,8 @@ impl fmt::Display for LiteralVHDL {
 impl fmt::Display for SignalRhs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Bus(x) => write!(f, "{}", x),
+            Self::Slice(x) => write!(f, "{}", x),
             Self::Literal(x) => write!(f, "{}", x),
-            Self::TrueFalse(x) => {
-                if *x {
-                    write!(f, "(others => '0')")
-                } else {
-                    write!(f, "(others => '1')")
-                }
-            }
         }
     }
 }
@@ -423,10 +415,10 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &chip_hdl.provider,
             false,
             &Vec::new(),
-        );
+        )?;
 
         // Declare components
-        let vhdl_components = generate_components(&chip_hdl);
+        let vhdl_components = generate_components(&chip);
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
         let components: Vec<Component> = vhdl_components.iter().map(Component::from).collect();
@@ -529,28 +521,13 @@ impl From<&SliceVHDL> for BusHDL {
 impl From<&SignalRhs> for BusHDL {
     fn from(vhdl: &SignalRhs) -> Self {
         match vhdl {
-            SignalRhs::Bus(slice) => BusHDL {
+            SignalRhs::Slice(slice) => BusHDL {
                 name: slice.name.clone(),
                 start: slice.start.clone(),
                 end: slice.end.clone(),
             },
             SignalRhs::Literal(l) => {
                 panic!("Not yet implemented.");
-            }
-            SignalRhs::TrueFalse(b) => {
-                if *b {
-                    BusHDL {
-                        name: String::from("false"),
-                        start: None,
-                        end: None,
-                    }
-                } else {
-                    BusHDL {
-                        name: String::from("true"),
-                        start: None,
-                        end: None,
-                    }
-                }
             }
         }
     }
@@ -568,14 +545,7 @@ impl From<&GenericPort> for VhdlPort {
 
 impl From<&PortMappingHDL> for PortMappingVHDL {
     fn from(pm: &PortMappingHDL) -> Self {
-        let wire;
-        if &pm.wire.name == "true" {
-            wire = SignalRhs::TrueFalse(true)
-        } else if &pm.wire.name == "false" {
-            wire = SignalRhs::TrueFalse(false)
-        } else {
-            wire = SignalRhs::Bus(SliceVHDL::from(&pm.wire))
-        }
+        let wire = SignalRhs::Slice(SliceVHDL::from(&pm.wire));
 
         PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
@@ -1278,45 +1248,9 @@ pub fn keyw(name: &str) -> String {
 //     Ok(())
 // }
 
-fn generate_components(hdl: &ChipHDL) -> Vec<VhdlComponent> {
+fn generate_components(chip: &Chip) -> Vec<VhdlComponent> {
     let mut res: Vec<VhdlComponent> = Vec::new();
-
-    let mut variables = HashMap::new();
-
-    for part in &hdl.parts {
-        match part {
-            Part::Component(c) => {
-                res.push(VhdlComponent::from(c));
-            }
-            Part::Loop(l) => {
-                for e in [&l.start, &l.end] {
-                    let end = eval_expr(e, &HashMap::new());
-                    variables.insert(l.iterator.value.clone(), end);
-
-                    for c in &l.body {
-                        let mut new_c: Component = c.clone();
-                        for m in &mut new_c.mappings {
-                            m.port.start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
-                            m.port.end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
-                            m.wire.start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
-                            m.wire.end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
-                        }
-
-                        new_c.generic_params = new_c
-                            .generic_params
-                            .iter()
-                            .map(|x| eval_expr(x, &variables))
-                            .collect();
-
-                        res.push(VhdlComponent::from(&new_c));
-                    }
-                }
-            }
-            Part::AssignmentHDL(_a) => {}
-        }
-    }
-
-    res
+    chip.components.iter().map(VhdlComponent::from).collect()
 }
 
 // #[cfg(test)]

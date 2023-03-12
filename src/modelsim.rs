@@ -155,7 +155,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
                     start: None,
                     end: None,
                 },
-                wire: Bus(SliceVHDL {
+                wire: Slice(SliceVHDL {
                     name: port.name.value.clone(),
                     start: None,
                     end: None,
