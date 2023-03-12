@@ -30,6 +30,7 @@ pub struct VhdlEntity {
     pub signals: Vec<Signal>,              // Declared signals.
     pub statements: Vec<Statement>,        // VHDL statements.
     pub dependencies: HashSet<VhdlEntity>, // Entities for components.
+    pub chip: Chip,
 }
 impl Hash for VhdlEntity {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -465,6 +466,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             signals,
             statements,
             dependencies,
+            chip,
         })
     }
 }

@@ -145,6 +145,13 @@ impl TryFrom<&TestBench> for VhdlEntity {
         // Dependencies of the test script are the chip being
         // tested + dependencies of the chip being tested.
         let chip_vhdl = VhdlEntity::try_from(&test_bench.chip)?;
+        let chip = Chip::new(
+            &test_bench.chip,
+            ptr::null_mut(),
+            &test_bench.chip.provider,
+            false,
+            &Vec::new(),
+        )?;
 
         let mut port_mappings = Vec::new();
         for port in &test_bench.chip.ports {
@@ -187,6 +194,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
             statements,
             signals,
             dependencies: HashSet::from([chip_vhdl]),
+            chip,
         })
     }
 }
