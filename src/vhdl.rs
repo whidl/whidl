@@ -203,11 +203,7 @@ impl fmt::Display for WaitVHDL {
 
 impl fmt::Display for LiteralVHDL {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.values.len() == 1 {
-            write!(f, "\'")?;
-        } else {
-            write!(f, "\"")?;
-        }
+        write!(f, "\"")?;
 
         for &x in self.values.iter().rev() {
             if x {
@@ -217,11 +213,7 @@ impl fmt::Display for LiteralVHDL {
             }
         }
 
-        if self.values.len() == 1 {
-            write!(f, "\'")
-        } else {
-            write!(f, "\"")
-        }
+        write!(f, "\"")
     }
 }
 
@@ -296,11 +288,7 @@ impl fmt::Display for Signal {
         write!(f, "{} : ", keyw(&self.name))?;
         match self.width {
             GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
-                if port_width_num > 1 {
-                    write!(f, "std_logic_vector({} downto 0);", port_width_num - 1)
-                } else {
-                    write!(f, "std_logic;")
-                }
+                write!(f, "std_logic_vector({} downto 0);", port_width_num - 1)
             }
             _ => {
                 let sub1 = GenericWidth::Expr(
@@ -346,15 +334,17 @@ impl fmt::Display for Process {
 /// Synthesizes VHDL for BusVHDL.
 impl std::fmt::Display for SliceVHDL {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.name == "true" {
+            return write!(f, "(others => '1')");
+        } else if self.name == "false" {
+            return write!(f, "(others => '0')");
+        }
+
         // Only write out downto syntax if this is an array.
         if self.start.is_some() {
             let start: &GenericWidth = self.start.as_ref().unwrap();
             let end: &GenericWidth = self.end.as_ref().unwrap();
-            if start == end {
-                write!(f, "{}({})", keyw(&self.name), start)
-            } else {
-                write!(f, "{}({} downto {})", keyw(&self.name), end, start)
-            }
+            write!(f, "{}({} downto {})", keyw(&self.name), end, start)
         } else {
             write!(f, "{}", keyw(&self.name))
         }
@@ -373,11 +363,7 @@ impl fmt::Display for VhdlPort {
 
         match self.width {
             GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
-                if port_width_num > 1 {
-                    write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
-                } else {
-                    write!(f, "std_logic")?;
-                }
+                write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
             }
             _ => {
                 let sub1 = GenericWidth::Expr(
@@ -418,10 +404,9 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &Vec::new(),
         )?;
 
-        
-
         // Declare components
-        let vhdl_components : Vec<VhdlComponent> = chip.components.iter().map(VhdlComponent::from).collect();
+        let vhdl_components: Vec<VhdlComponent> =
+            chip.components.iter().map(VhdlComponent::from).collect();
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
 
@@ -951,9 +936,9 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 library ieee;
 use ieee.std_logic_1164.all;
 entity nand_n2v is
-port (a : in std_logic;
-b : in std_logic;
-out_n2v : out std_logic
+port (a : in std_logic_vector(0 downto 0);
+b : in std_logic_vector(0 downto 0);
+out_n2v : out std_logic_vector(0 downto 0)
 );
 end entity nand_n2v;
 architecture arch of nand_n2v is
