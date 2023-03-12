@@ -411,12 +411,14 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
     fn try_from(chip_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
         let chip = Chip::new(
-            &chip_hdl,
+            chip_hdl,
             ptr::null_mut(),
             &chip_hdl.provider,
-            false,
+            true,
             &Vec::new(),
         )?;
+
+        
 
         // Declare components
         let vhdl_components : Vec<VhdlComponent> = chip.components.iter().map(VhdlComponent::from).collect();
@@ -428,7 +430,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         }
 
         let inferred_widths = infer_widths(
-            &chip_hdl,
+            chip_hdl,
             &Vec::new(),
             &chip.components,
             &chip_hdl.provider,
