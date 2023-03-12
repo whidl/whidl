@@ -88,9 +88,10 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let mut parser = Parser::new(&mut scanner, provider.clone());
     let hdl = parser.parse()?;
+    let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
 
     // Convert HDL to VHDL (VHDl synthesis).
-    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&hdl)?;
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&chip)?;
 
     // Create a Quartus Prime project.
     let quartus_dir = Path::new(&output_dir);

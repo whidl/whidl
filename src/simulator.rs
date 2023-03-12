@@ -151,7 +151,7 @@ pub struct Assignment {
 // A chip constructed from parsed HDL.
 pub struct Chip {
     pub name: String,
-    hdl: Option<ChipHDL>, // This should probably be a reference. We don't need to have a zillion copies of the HDL.
+    pub hdl: Option<ChipHDL>, // This should probably be a reference. We don't need to have a zillion copies of the HDL.
     pub circuit: Circuit,
     pub ports: HashMap<String, Port>,
     input_port_nodes: Vec<NodeIndex>,
