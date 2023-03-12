@@ -15,6 +15,7 @@ use std::io::Write as OtherWrite;
 use std::path::PathBuf;
 use std::ptr;
 
+use crate::error::{ErrorKind, N2VError};
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::Chip;
@@ -412,27 +413,33 @@ impl std::fmt::Display for PortMappingVHDL {
 // ========= CONVERSIONS ========== //
 
 /// This is where VHDL is synthesized for an HDL chip.
-impl TryFrom<&Chip> for VhdlEntity {
+impl TryFrom<&ChipHDL> for VhdlEntity {
     type Error = Box<dyn Error>;
 
-    fn try_from(chip_hdl: &Chip) -> Result<Self, Box<dyn Error>> {
-        // If name is nand then return a hard-coded VHDL entity.
+    fn try_from(chip_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
+        let chip = Chip::new(
+            &chip_hdl,
+            ptr::null_mut(),
+            &chip_hdl.provider,
+            false,
+            &Vec::new(),
+        );
 
         // Declare components
-        let vhdl_components = generate_components(&chip_hdl.hdl.as_ref().unwrap());
+        let vhdl_components = generate_components(&chip_hdl);
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
         let components: Vec<Component> = vhdl_components.iter().map(Component::from).collect();
 
-        for port in &chip_hdl.hdl.as_ref().unwrap().ports {
+        for port in &chip_hdl.ports {
             ports.push(VhdlPort::from(port));
         }
 
         let inferred_widths = infer_widths(
-            &chip_hdl.hdl.as_ref().unwrap(),
+            &chip_hdl,
             &Vec::new(),
             &components,
-            &chip_hdl.hdl.as_ref().unwrap().provider,
+            &chip_hdl.provider,
             &Vec::new(),
         )?;
 
@@ -450,19 +457,10 @@ impl TryFrom<&Chip> for VhdlEntity {
         let dependencies: HashSet<VhdlEntity> = vhdl_components
             .iter()
             .map(|component| {
-                let component_hdl =
-                    get_hdl(&component.unit, &chip_hdl.hdl.as_ref().unwrap().provider).unwrap();
-                let chip = Chip::new(
-                    &component_hdl,
-                    ptr::null_mut(),
-                    &chip_hdl.hdl.as_ref().unwrap().provider,
-                    false,
-                    &Vec::new(),
-                )
-                .unwrap();
-                VhdlEntity::try_from(&chip).unwrap()
+                let component_hdl = get_hdl(&component.unit, &chip_hdl.provider).unwrap();
+                VhdlEntity::try_from(&component_hdl)
             })
-            .collect();
+            .collect::<Result<HashSet<VhdlEntity>, Box<dyn Error>>>()?;
 
         let statements: Vec<Statement> = vhdl_components
             .into_iter()
@@ -1110,16 +1108,9 @@ end architecture arch;
         let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
         let mut next_parser = Parser::new(&mut next_scanner, qp.chip_hdl.provider.clone());
         let next_hdl = next_parser.parse()?;
-        let chip = Chip::new(
-            &next_hdl,
-            ptr::null_mut(),
-            &next_hdl.provider,
-            false,
-            &Vec::new(),
-        )?;
 
         // Convert HDL to VHDL (VHDl synthesis).
-        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&chip)?;
+        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
 
         let next_filename = next_chip_name.clone() + ".vhdl";
         let mut next_file = File::create(qp.project_dir.join(&next_filename))?;

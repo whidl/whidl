@@ -4,12 +4,12 @@
 use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
 use crate::scanner::Scanner;
+use crate::simulator::Chip;
 use crate::test_parser::{OutputFormat, TestScript};
 use crate::test_script::{bitvec_to_vecbool, parse_test, test_input_to_bitvec};
 use crate::vhdl::write_quartus_project;
-use crate::vhdl::*;
 use crate::vhdl::SignalRhs::*;
-use crate::simulator::Chip;
+use crate::vhdl::*;
 use crate::ChipHDL;
 
 use std::collections::HashSet;
@@ -18,8 +18,8 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::rc::Rc;
 use std::ptr;
+use std::rc::Rc;
 
 /// This structure represents a Modelsim testbench.
 pub struct TestBench {
@@ -141,12 +141,10 @@ impl TryFrom<&TestBench> for VhdlEntity {
         let generics = Vec::new();
         let ports = Vec::new();
         let signals = test_bench.signals.value.clone();
-    
-        let chip = Chip::new(&test_bench.chip, ptr::null_mut(), &test_bench.chip.provider, false, &Vec::new())?;
 
         // Dependencies of the test script are the chip being
         // tested + dependencies of the chip being tested.
-        let chip_vhdl = VhdlEntity::try_from(&chip)?;
+        let chip_vhdl = VhdlEntity::try_from(&test_bench.chip)?;
 
         let mut port_mappings = Vec::new();
         for port in &test_bench.chip.ports {
@@ -240,8 +238,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let mut parser = Parser::new(&mut scanner, provider.clone());
     let hdl = parser.parse()?;
-    let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())?;
-    let chip_vhdl = VhdlEntity::try_from(&chip)?;
+    let chip_vhdl = VhdlEntity::try_from(&hdl)?;
 
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
