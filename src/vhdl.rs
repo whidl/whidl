@@ -418,10 +418,9 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         )?;
 
         // Declare components
-        let vhdl_components = generate_components(&chip);
+        let vhdl_components : Vec<VhdlComponent> = chip.components.iter().map(VhdlComponent::from).collect();
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
-        let components: Vec<Component> = vhdl_components.iter().map(Component::from).collect();
 
         for port in &chip_hdl.ports {
             ports.push(VhdlPort::from(port));
@@ -430,7 +429,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         let inferred_widths = infer_widths(
             &chip_hdl,
             &Vec::new(),
-            &components,
+            &chip.components,
             &chip_hdl.provider,
             &Vec::new(),
         )?;
@@ -486,34 +485,12 @@ impl From<&Component> for VhdlComponent {
     }
 }
 
-/// Conversion from VhdlComponents to Components is necessary
-/// because infer_widths operates over Components.
-impl From<&VhdlComponent> for Component {
-    fn from(vc: &VhdlComponent) -> Self {
-        Component {
-            name: Identifier::from(&vc.unit[..]),
-            generic_params: vc.generic_params.clone(),
-            mappings: vc.port_mappings.iter().map(PortMappingHDL::from).collect(),
-        }
-    }
-}
-
 impl From<&BusHDL> for SliceVHDL {
     fn from(hdl: &BusHDL) -> Self {
         SliceVHDL {
             name: hdl.name.clone(),
             start: hdl.start.clone(),
             end: hdl.end.clone(),
-        }
-    }
-}
-
-impl From<&SliceVHDL> for BusHDL {
-    fn from(vhdl: &SliceVHDL) -> Self {
-        BusHDL {
-            name: vhdl.name.clone(),
-            start: vhdl.start.clone(),
-            end: vhdl.end.clone(),
         }
     }
 }
@@ -551,16 +528,6 @@ impl From<&PortMappingHDL> for PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
             port: SliceVHDL::from(&pm.port),
             wire,
-        }
-    }
-}
-
-impl From<&PortMappingVHDL> for PortMappingHDL {
-    fn from(pm: &PortMappingVHDL) -> Self {
-        PortMappingHDL {
-            wire_ident: Identifier::from(&pm.wire_name.clone()[..]),
-            port: BusHDL::from(&pm.port),
-            wire: BusHDL::from(&pm.wire),
         }
     }
 }
@@ -1247,11 +1214,6 @@ pub fn keyw(name: &str) -> String {
 // ) -> Result<(), Box<dyn Error>> {
 //     Ok(())
 // }
-
-fn generate_components(chip: &Chip) -> Vec<VhdlComponent> {
-    let mut res: Vec<VhdlComponent> = Vec::new();
-    chip.components.iter().map(VhdlComponent::from).collect()
-}
 
 // #[cfg(test)]
 // mod test {
