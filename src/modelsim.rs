@@ -208,7 +208,17 @@ impl TryFrom<&TestBench> for VhdlEntity {
 ///     function.
 /// - `test_script_path`: Path to the test script to convert.
 pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(), Box<dyn Error>> {
-    let test_script = parse_test(test_script_path)?;
+    let test_script = match parse_test(test_script_path) {
+        Err(e) => {
+            return Err(Box::new(TransformedError {
+                source: Some(e),
+                msg: format!("Unable to parse test script {:?}", test_script_path),
+                kind: ErrorKind::IOError,
+            }))
+        }
+        Ok(x) => x,
+    };
+
     let test_bench: TestBench = TestBench::try_from(&test_script)?;
 
     let test_script_filename = match test_script_path.file_name() {
@@ -250,7 +260,17 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
 
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
-    write_quartus_project(&project)?;
+
+    match write_quartus_project(&project) {
+        Ok(()) => (),
+        Err(e) => {
+            return Err(Box::new(TransformedError {
+                source: Some(e),
+                msg: String::from("Unable to write quartus project"),
+                kind: ErrorKind::IOError,
+            }))
+        }
+    }
 
     Ok(())
 }
@@ -408,6 +428,14 @@ mod test {
         run_test(
             PathBuf::from("resources/tests/nand2tetris/solutions/ALU.tst"),
             "work.ALU_tst",
+        );
+    }
+
+    #[test]
+    fn test_bit() {
+        run_test(
+            PathBuf::from("resources/tests/nand2tetris/solutions/Bit.tst"),
+            "work.Bit_tst",
         );
     }
 }

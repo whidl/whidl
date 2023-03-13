@@ -956,8 +956,8 @@ LIBRARY altera;
 USE altera.altera_primitives_components.all;
 
 entity DFF_n2v is
-port (in_n2v : in std_logic;
-out_n2v : out std_logic);
+port (in_n2v : in std_logic_vector(0 downto 0);
+out_n2v : out std_logic_vector(0 downto 0));
 end entity DFF_n2v;
 
 architecture arch of DFF_n2v is
@@ -976,8 +976,8 @@ x0: DFF port map (d => in_n2v, clrn => '1', prn => '1', q => out_n2v);
 end architecture arch;
 "#;
 
-    //let mut file = File::create(qp.project_dir.join("dff.vhdl"))?;
-    //file.write_all(dff_vhdl.as_bytes())?;
+    let mut file = File::create(qp.project_dir.join("DFF.vhdl"))?;
+    file.write_all(dff_vhdl.as_bytes())?;
 
     tcl.push_str("project_close");
     let mut file = File::create(qp.project_dir.join("project.tcl"))?;
@@ -992,7 +992,7 @@ end architecture arch;
     // convert each chip type once.
     let mut done: HashSet<String> = HashSet::new();
     done.insert(String::from("Nand"));
-    done.insert(String::from("Dff"));
+    done.insert(String::from("DFF"));
 
     // Recursively parse and write all dependency components.
     // Worklist is set of chip names that we need to convert from HDL to VHDL.
