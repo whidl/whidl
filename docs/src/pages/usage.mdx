@@ -1,5 +1,10 @@
 # Using whidl
-First off, if you ever can't remember a command in whidl, type `whidl -h` or `whidl --help` to list them. You can then type `whidl <name of command> -h` to show the available options for that command (for example, `whidl check -h` shows the options for the check command).
+If you ever forget a command in whidl, type `whidl -h` or `whidl --help` to list them. You can then type `whidl <name of command> -h` to show the available options for that command (for example, `whidl check -h` shows the options for the check command).
+
+### Installation
+- Clone the repository with `git clone https://github.com/whidl/whidl.git`, and navigate to the install directory.
+- Run `cargo build --release`.
+- The compiled binary will be located in the target/releases directory. Run it with `./target/release/whidl`.
 
 
 ### Check your code
@@ -10,14 +15,14 @@ Example:
 
 
 ### Run tests
-To test hdl you can run `whidl test --test-file <name of test file>` where the test file is a test script.
+whidl uses the same .tst and .cmp files that Nand2Tetris uses for testing. To test a .hdl file you can run `whidl test --test-file <name of test file>` where the test file is a test script.
 
 Example: 
 `whidl test --test-file my-hdl/MyChip.tst`
 
 
 ### Generate vhdl
-The `synth-vhdl` command generates vhdl from and hdl file that can be run through quartus on an FPGA. You have to tell whidl where you want it to put the vhdl that it generates using the `--output-dir` option.
+The `synth-vhdl` command generates vhdl from an hdl file that can be run through quartus on an FPGA. You have to tell whidl where you want it to put the vhdl that it generates using the `--output-dir` option.
 
 Example:
 `whidl synth-vhdl --output-dir my-vhdl my-hdl/SomeChip.hdl`
