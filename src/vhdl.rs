@@ -170,11 +170,11 @@ impl<'a> Cage<'a> for &Vec<VhdlPort> {}
 impl fmt::Display for IdStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.stmt {
-            Statement::Component(x) => write!(f, "{}", x),
-            Statement::Process(x) => write!(f, "{}", x),
-            Statement::Assignment(x) => write!(f, "{}", x),
-            Statement::Assert(x) => write!(f, "{}", x),
-            Statement::Wait(x) => write!(f, "{}", x),
+            Statement::Component(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Process(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Assignment(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Assert(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Wait(x) => write!(f, "cn2v{}: {}", self.id, x),
         }
     }
 }
@@ -261,8 +261,11 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "begin")?;
         for (i, x) in self.statements.iter().enumerate() {
-            let id_stmt = IdStatement { id: i, stmt: x.clone() };
-            writeln!(f, "cn2v{}: {}", i, id_stmt)?;
+            let id_stmt = IdStatement {
+                id: i,
+                stmt: x.clone(),
+            };
+            writeln!(f, "{}", id_stmt)?;
         }
 
         writeln!(f, "end arch;")?;
@@ -327,8 +330,11 @@ impl fmt::Display for Process {
         writeln!(f, "process begin")?;
 
         for (i, x) in self.statements.iter().enumerate() {
-            let id_stmt = IdStatement { id: i, stmt: x.clone() };
-            writeln!(f, "cn2v{}: {}", i, id_stmt)?;
+            let id_stmt = IdStatement {
+                id: i,
+                stmt: x.clone(),
+            };
+            writeln!(f, "{}", id_stmt)?;
         }
 
         writeln!(f, "end process;")
