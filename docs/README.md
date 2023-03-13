@@ -1,4 +1,28 @@
-## Toolchain Design 
+# WHiDL documentation
 
-https://dev.to/alekseiberezkin/setting-up-react-typescript-app-without-create-react-app-oph
+This documentation is deployed to https://whidl.io
 
+## Building the docs
+
+First you must build the whidl web assembly module.
+
+```
+wasm-pack build --target web
+```
+
+Then you can build the documentation using the commands below. The documentation
+build directory is `docs/build`.
+
+```
+cd docs
+npm install
+npm run build
+```
+
+You can also run the documentation app from a development server.
+
+```
+cd docs
+npm install
+npm run start
+```
