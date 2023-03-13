@@ -108,7 +108,7 @@ export default function App() {
                             </IconButton>
                         </Toolbar>
                     </AppBar>
-                    <Drawer variant="permanent" sx={{ width: 250, display: { xs: 'none', lg: 'block' } }} PaperProps={{ sx: { width: 250 } }}>
+                    <Drawer variant="permanent" sx={{ width: 250 }} PaperProps={{ sx: { width: 250 } }}>
                         <Toolbar />
                         <Nav />
                     </Drawer>
