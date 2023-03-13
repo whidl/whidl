@@ -1,9 +1,6 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
-// TOD0: component counter
-// TODO: component declarations
-
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
