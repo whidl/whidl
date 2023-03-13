@@ -41,6 +41,11 @@ impl PartialEq for VhdlEntity {
 }
 impl Eq for VhdlEntity {}
 
+pub struct IdStatement {
+    pub id: usize,
+    pub stmt: Statement,
+}
+
 #[derive(Clone)]
 //#[allow(clippy::large_enum_variant)]
 pub enum Statement {
@@ -162,14 +167,14 @@ impl<'a> Cage<'a> for &Vec<VhdlPort> {}
 // The fmt::Display trait is used to convert VHDL abstract syntax nodes
 // to VHDL concrete syntax.
 
-impl fmt::Display for Statement {
+impl fmt::Display for IdStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Component(x) => write!(f, "{}", x),
-            Self::Process(x) => write!(f, "{}", x),
-            Self::Assignment(x) => write!(f, "{}", x),
-            Self::Assert(x) => write!(f, "{}", x),
-            Self::Wait(x) => write!(f, "{}", x),
+        match &self.stmt {
+            Statement::Component(x) => write!(f, "{}", x),
+            Statement::Process(x) => write!(f, "{}", x),
+            Statement::Assignment(x) => write!(f, "{}", x),
+            Statement::Assert(x) => write!(f, "{}", x),
+            Statement::Wait(x) => write!(f, "{}", x),
         }
     }
 }
@@ -256,7 +261,8 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "begin")?;
         for (i, x) in self.statements.iter().enumerate() {
-            writeln!(f, "cn2v{}: {}", i, x)?;
+            let id_stmt = IdStatement { id: i, stmt: x.clone() };
+            writeln!(f, "cn2v{}: {}", i, id_stmt)?;
         }
 
         writeln!(f, "end arch;")?;
@@ -320,8 +326,9 @@ impl fmt::Display for Process {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "process begin")?;
 
-        for s in &self.statements {
-            writeln!(f, "{}", s)?;
+        for (i, x) in self.statements.iter().enumerate() {
+            let id_stmt = IdStatement { id: i, stmt: x.clone() };
+            writeln!(f, "cn2v{}: {}", i, id_stmt)?;
         }
 
         writeln!(f, "end process;")
@@ -954,7 +961,9 @@ USE altera.altera_primitives_components.all;
 
 entity DFF_n2v is
 port (in_n2v : in std_logic_vector(0 downto 0);
-out_n2v : out std_logic_vector(0 downto 0));
+out_n2v : out std_logic_vector(0 downto 0);
+clk : in std_logic_vector(0 downto 0)
+);
 end entity DFF_n2v;
 
 architecture arch of DFF_n2v is
@@ -969,7 +978,7 @@ COMPONENT DFF
 END COMPONENT;
 
 begin
-x0: DFF port map (d => in_n2v, clrn => '1', prn => '1', q => out_n2v);
+x0: DFF port map (d => in_n2v(0), clrn => '1', prn => '1', q => out_n2v(0), clk => clk(0));
 end architecture arch;
 "#;
 

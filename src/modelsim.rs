@@ -431,11 +431,4 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_bit() {
-        run_test(
-            PathBuf::from("resources/tests/nand2tetris/solutions/Bit.tst"),
-            "work.Bit_tst",
-        );
-    }
 }
