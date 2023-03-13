@@ -146,8 +146,6 @@ export default function TruthTableGenerator() {
     <Grid container spacing={2} sx={{width: '100%'}}>
       <Grid item xs={8} md={8} lg={8}>
         <Editor
-          height="70vh"
-          width="80vh"
           theme="vs-dark"
           onMount={handleEditorMount}
           onChange={(s) => { changeCode(editor_ref.current.getValue()) }}
