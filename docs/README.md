@@ -26,3 +26,9 @@ cd docs
 npm install
 npm run start
 ```
+
+## Adding a documentation page
+
+1. Add the `.mdx` file to `docs/src`.
+2. Add a route in `index.tsx`.
+3. Add a Nav entry in `nav.tsx`.

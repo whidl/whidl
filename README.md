@@ -5,18 +5,10 @@
 
 ## Documentation
 
-In-progress documentation is at [whidl.github.io/whidl](https://whidl.github.io/whidl). The docs source is
-the `docs` directory in this repository. The documentation can be read
-locally by using `mdbook serve`, or on GitHub codespaces `mdbook serve --hostname 0.0.0.0`. 
+In-progress documentation is at [whidl.io](https://whidl.io/. 
+The docs source is the `docs` directory in this repository. See `docs/README.md`
+for more information.
 
-The documentation at whidl.github.io/whidl is updated by any push to the `main`
-branch that changes files in `doc/**`.
-
-### Adding a documentation page
-
-1. Add the `.mdx` file to `docs/src`.
-2. Add a route in `index.tsx`.
-3. Add a Nav entry in `nav.tsx`.
 
 ## Using whidl to synthesize ROMs for the CS 314 Toy ARM computer
 
