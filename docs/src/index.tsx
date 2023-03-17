@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from "react-dom/client";
 import { StyledEngineProvider } from "@mui/material/styles";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import App from "./app";
 
 import Home from "./pages/home.mdx";
@@ -14,7 +14,7 @@ import TruthTables from "./pages/truth-tables";
 ReactDOM.createRoot(document.querySelector("#root")!).render(
     <React.StrictMode>
         <StyledEngineProvider injectFirst>
-            <BrowserRouter>
+            <HashRouter>
                 <Routes>
                     <Route path="/" element={<App />}>
                         <Route index element={<Home />} />
@@ -25,7 +25,7 @@ ReactDOM.createRoot(document.querySelector("#root")!).render(
                         <Route path="truth-tables" element={<TruthTables />} />
                     </Route>
                 </Routes>
-            </BrowserRouter>
+            </HashRouter>
         </StyledEngineProvider>
     </React.StrictMode>
 )
