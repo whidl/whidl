@@ -145,6 +145,13 @@ export default function TruthTableGenerator() {
   return (
     <Grid container spacing={2} sx={{width: '100%'}}>
       <Grid item xs={8} md={8} lg={8}>
+        <h1>Truth Table Generator</h1>
+        This demo allows a user to enter HDL code and generate the
+        corresponding truth table. WHiDL has been compiled to web assembly and
+        called from a React component. The output of the WHiDL simulator is
+        used to generate the truth table.
+      </Grid>
+      <Grid item xs={8} md={8} lg={8}>
         <Editor
           theme="vs-dark"
           onMount={handleEditorMount}
