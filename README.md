@@ -5,7 +5,7 @@
 
 ## Documentation
 
-In-progress documentation is at [whidl.io](https://whidl.io/. 
+In-progress documentation is at [whidl.io](https://whidl.io/). 
 The docs source is the `docs` directory in this repository. See `docs/README.md`
 for more information.
 
