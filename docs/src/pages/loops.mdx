@@ -18,7 +18,7 @@ CHIP NotGen {
 }
 ```
 
-You can use generic values within the for-loop too if you want.
+You can also use generic values within the for loop. In the below example, you pass in the value X when using the chip in order to determine the size of the output and how far the loop iterates.
 ``` hdl
 CHIP NotGen<X> {
     IN in[X];

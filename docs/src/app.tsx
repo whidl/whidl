@@ -108,7 +108,7 @@ export default function App() {
                             </IconButton>
                         </Toolbar>
                     </AppBar>
-                    <Drawer variant="permanent" sx={{ width: 250, display: { xs: 'none', lg: 'block' } }} PaperProps={{ sx: { width: 250 } }}>
+                    <Drawer variant="permanent" sx={{ width: 250 }} PaperProps={{ sx: { width: 250 } }}>
                         <Toolbar />
                         <Nav />
                     </Drawer>
@@ -126,7 +126,7 @@ export default function App() {
 
                     </Drawer>
                     <Box component="main" sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', mt: '64px', mb: '32px', ml: 4, mr: 4 }}>
-                        <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: contentWidth }}>
+                        <Box className="section-to-print" sx={{ flexGrow: 1, maxWidth: 'false' }}>
                             <Outlet context={outletContext} />
                         </Box>
                     </Box>
