@@ -12,11 +12,10 @@ use std::io::Write as OtherWrite;
 use std::path::PathBuf;
 use std::ptr;
 
-use crate::error::{ErrorKind, N2VError};
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
 use crate::simulator::Chip;
-use crate::simulator::{gather_assignments, infer_widths};
+use crate::simulator::infer_widths;
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
@@ -502,7 +501,7 @@ impl From<&SignalRhs> for BusHDL {
                 start: slice.start.clone(),
                 end: slice.end.clone(),
             },
-            SignalRhs::Literal(l) => {
+            SignalRhs::Literal(_l) => {
                 panic!("Not yet implemented.");
             }
         }
