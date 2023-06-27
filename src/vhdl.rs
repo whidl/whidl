@@ -471,6 +471,22 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
+
+fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappingHDL>> {
+    // port_mappings is a HashMap where each key is the port name, and each
+    // value is a vector of all the PortMappingHDL instances where that port
+    // is mapped.
+    let mut grouped_port_mappings: HashMap<String, Vec<&PortMappingHDL>> = HashMap::new();
+    for port_mapping in &component.mappings {
+        grouped_port_mappings
+            .entry(port_mapping.port.name.clone())
+            .or_default()
+            .push(port_mapping);
+    }
+    grouped_port_mappings
+}
+
+
 /// Transforms a `&Component` into a `VhdlComponent.
 ///
 /// In HDL, multiple signals can be mapped to a single output port, which is not
@@ -486,17 +502,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 /// A `VhdlComponent` instance that represents the transformed component.
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
-        // port_mappings is a HashMap where each key is the port name, and each
-        // value is a vector of all the PortMappingHDL instances where that port
-        // is mapped.
-        let mut port_mappings: HashMap<String, Vec<&PortMappingHDL>> = HashMap::new();
-        for port_mapping in &component.mappings {
-            port_mappings
-                .entry(port_mapping.port.name.clone())
-                .or_default()
-                .push(port_mapping);
-        }
-
+        let port_mappings = group_port_mappings(component);
         let mut vhdl_port_mappings = Vec::new();
         for (port_name, mappings) in port_mappings {
             if mappings.len() == 1 {
