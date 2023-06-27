@@ -486,38 +486,36 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 /// A `VhdlComponent` instance that represents the transformed component.
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
-        // If we have more than one signal connected to a port, then we will
-        // need to create a new intermediate signal.  After this paragraph,
-        // `output_port_wires` will be a map from output port names to a list of
-        // connected signals.
-        let mut output_port_wires: HashMap<String, Vec<BusHDL>> = HashMap::new();
+        // port_mappings is a HashMap where each key is the port name, and each
+        // value is a vector of all the PortMappingHDL instances where that port
+        // is mapped.
+        let mut port_mappings: HashMap<String, Vec<&PortMappingHDL>> = HashMap::new();
         for port_mapping in &component.mappings {
-            output_port_wires
-                .entry(port_mapping.wire_ident.value.clone())
+            port_mappings
+                .entry(port_mapping.port.name.clone())
                 .or_default()
-                .push(port_mapping.wire.clone());
+                .push(port_mapping);
         }
 
-        // We need to convert all of the HDL port mappings into VHDL port
-        // mappings.  After this paragraph, `vhdl_port_mappings` will be a list
-        // of `PortMappingVHDL` instances.
         let mut vhdl_port_mappings = Vec::new();
-        for (wire_name, wires) in output_port_wires {
-            if wires.len() == 1 {
-                // If there's only one wire, no intermediate signal is necessary
-                vhdl_port_mappings.push(PortMappingVHDL {
-                    wire_name,
-                    port: SliceVHDL::from(&wires[0]),
-                    wire: SignalRhs::Slice(SliceVHDL::from(&wires[0])),
-                });
+        for (port_name, mappings) in port_mappings {
+            if mappings.len() == 1 {
+                // If there's only one mapping, no intermediate signal is necessary
+                vhdl_port_mappings.push(PortMappingVHDL::from(mappings[0]));
             } else {
-                // If there's more than one wire, create an intermediate signal for each
-                for (i, wire) in wires.iter().enumerate() {
-                    let intermediate_signal_name = format!("{}_{}", wire_name, i);
+                // If there's more than one mapping, create an intermediate signal for each
+                for (i, mapping) in mappings.iter().enumerate() {
+                    let intermediate_signal_name = format!("{}_{}", port_name, i);
+                    let wire = SliceVHDL {
+                        name: intermediate_signal_name.clone(),
+                        start: mapping.wire.start.clone(),
+                        end: mapping.wire.end.clone(),
+                    };
+
                     vhdl_port_mappings.push(PortMappingVHDL {
                         wire_name: intermediate_signal_name,
-                        port: SliceVHDL::from(wire),
-                        wire: SignalRhs::Slice(SliceVHDL::from(wire)),
+                        port: SliceVHDL::from(&mapping.port),
+                        wire: SignalRhs::Slice(wire),
                     });
                 }
             }
