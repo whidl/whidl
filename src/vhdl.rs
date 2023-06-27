@@ -14,8 +14,8 @@ use std::ptr;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::parser::*;
-use crate::simulator::Chip;
 use crate::simulator::infer_widths;
+use crate::simulator::Chip;
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
@@ -313,14 +313,18 @@ impl fmt::Display for Signal {
 
 impl fmt::Display for VhdlComponent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mappings_vhdl: String = self
-            .port_mappings
-            .iter()
-            .map(|x| format!("{}", x))
-            .collect::<Vec<String>>()
-            .join(", ");
+        write!(f, "{} port map(", keyw(&self.unit))?;
 
-        writeln!(f, "{} port map({});", keyw(&self.unit), mappings_vhdl)
+        // At this point the VHDL AST should be valid, so here
+        // we don't need to handle the case where the same output port
+        // is used for multiple signals.
+        for (i, mapping) in self.port_mappings.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", mapping)?;
+        }
+        writeln!(f, ");")
     }
 }
 
@@ -467,18 +471,62 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
+/// Transforms a `&Component` into a `VhdlComponent.
+///
+/// In HDL, multiple signals can be mapped to a single output port, which is not
+/// supported in VHDL. This function creates an intermediate signals when
+/// necessary.
+///
+/// # Parameters
+///
+/// - `component`: The `Component` instance to transform.
+///
+/// # Returns
+///
+/// A `VhdlComponent` instance that represents the transformed component.
 impl From<&Component> for VhdlComponent {
     fn from(component: &Component) -> Self {
-        let port_mappings: Vec<PortMappingVHDL> = component
-            .mappings
-            .iter()
-            .map(PortMappingVHDL::from)
-            .collect();
+        // If we have more than one signal connected to a port, then we will
+        // need to create a new intermediate signal.  After this paragraph,
+        // `output_port_wires` will be a map from output port names to a list of
+        // connected signals.
+        let mut output_port_wires: HashMap<String, Vec<BusHDL>> = HashMap::new();
+        for port_mapping in &component.mappings {
+            output_port_wires
+                .entry(port_mapping.wire_ident.value.clone())
+                .or_default()
+                .push(port_mapping.wire.clone());
+        }
+
+        // We need to convert all of the HDL port mappings into VHDL port
+        // mappings.  After this paragraph, `vhdl_port_mappings` will be a list
+        // of `PortMappingVHDL` instances.
+        let mut vhdl_port_mappings = Vec::new();
+        for (wire_name, wires) in output_port_wires {
+            if wires.len() == 1 {
+                // If there's only one wire, no intermediate signal is necessary
+                vhdl_port_mappings.push(PortMappingVHDL {
+                    wire_name,
+                    port: SliceVHDL::from(&wires[0]),
+                    wire: SignalRhs::Slice(SliceVHDL::from(&wires[0])),
+                });
+            } else {
+                // If there's more than one wire, create an intermediate signal for each
+                for (i, wire) in wires.iter().enumerate() {
+                    let intermediate_signal_name = format!("{}_{}", wire_name, i);
+                    vhdl_port_mappings.push(PortMappingVHDL {
+                        wire_name: intermediate_signal_name,
+                        port: SliceVHDL::from(wire),
+                        wire: SignalRhs::Slice(SliceVHDL::from(wire)),
+                    });
+                }
+            }
+        }
 
         VhdlComponent {
             unit: component.name.value.clone(),
             generic_params: component.generic_params.clone(),
-            port_mappings,
+            port_mappings: vhdl_port_mappings,
         }
     }
 }
