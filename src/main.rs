@@ -12,6 +12,7 @@ mod test_parser;
 mod test_scanner;
 mod test_script;
 mod vhdl;
+mod opt;
 
 use error::*;
 use modelsim::synth_vhdl_test;
