@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::ptr;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
+use crate::opt::optimization::OptimizationPass;
+use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::parser::*;
 use crate::simulator::infer_widths;
 use crate::simulator::Chip;
@@ -408,7 +410,10 @@ impl std::fmt::Display for PortMappingVHDL {
 impl TryFrom<&ChipHDL> for VhdlEntity {
     type Error = Box<dyn Error>;
 
-    fn try_from(chip_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
+    fn try_from(raw_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
+        let dedupe_pass = PortMapDedupe;
+        let chip_hdl = &dedupe_pass.apply(raw_hdl)?;
+
         let chip = Chip::new(
             chip_hdl,
             ptr::null_mut(),
@@ -471,7 +476,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
-
 fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappingHDL>> {
     // port_mappings is a HashMap where each key is the port name, and each
     // value is a vector of all the PortMappingHDL instances where that port
@@ -485,7 +489,6 @@ fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappin
     }
     grouped_port_mappings
 }
-
 
 /// Transforms a `&Component` into a `VhdlComponent.
 ///

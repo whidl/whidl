@@ -5,8 +5,8 @@
 //! instances' port mappings by introducing intermediate signals.  The VHDL
 //! synthesizer depends on this pass.
 
-use crate::parser::ChipHDL;
 use crate::opt::optimization::OptimizationPass;
+use crate::parser::ChipHDL;
 
 use std::error::Error;
 
