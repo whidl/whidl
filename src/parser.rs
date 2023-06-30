@@ -8,6 +8,8 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::fmt;
+
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -15,6 +17,16 @@ pub enum Part {
     Component(Component),
     Loop(Loop),
     AssignmentHDL(AssignmentHDL),
+}
+
+impl fmt::Display for Part {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Part::Component(component) => write!(f, "{}", component),
+            Part::Loop(loop_part) => write!(f, "{}", loop_part),
+            Part::AssignmentHDL(assignment) => write!(f, "{}", assignment),
+        }
+    }
 }
 
 /// The Parse Tree for an HDL Chip.
@@ -29,10 +41,44 @@ pub struct ChipHDL {
 }
 
 impl std::fmt::Display for ChipHDL {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: PORTS({:?})", self.name, self.ports)
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "CHIP {} {{", self.name)?;
+
+        write!(f, "    IN ")?;
+        let input_ports: Vec<_> = self.ports.iter()
+            .filter(|port| matches!(port.direction, PortDirection::In))
+            .collect();
+        for (i, port) in input_ports.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", port.name)?;
+        }
+        writeln!(f, ";")?;
+
+        write!(f, "    OUT ")?;
+        let output_ports: Vec<_> = self.ports.iter()
+            .filter(|port| matches!(port.direction, PortDirection::Out))
+            .collect();
+        for (i, port) in output_ports.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", port.name)?;
+        }
+        writeln!(f, ";")?;
+
+        for part in &self.parts {
+            writeln!(f, "\t{}", part)?;
+        }
+
+        writeln!(f, "}}")?;
+
+        Ok(())
     }
 }
+
+
 
 impl ChipHDL {
     pub fn get_port(&self, name: &str) -> Result<&GenericPort, Box<dyn Error>> {
@@ -92,6 +138,12 @@ pub struct Identifier {
     pub line: Option<u32>,
 }
 
+impl std::fmt::Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl From<Token> for Identifier {
     fn from(t: Token) -> Self {
         if t.token_type != TokenType::Identifier {
@@ -136,12 +188,36 @@ pub struct Component {
     pub generic_params: Vec<GenericWidth>,
 }
 
+impl fmt::Display for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        for (i, mapping) in self.mappings.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", mapping)?;
+        }
+        write!(f, ")")
+    }
+}
+
+
 #[derive(Clone)]
 pub struct Loop {
     pub start: GenericWidth,
     pub end: GenericWidth,
     pub iterator: Identifier,
     pub body: Vec<Component>, // Prevent nested loops.
+}
+
+impl fmt::Display for Loop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "FOR {} FROM {} TO {}", self.iterator, self.start, self.end)?;
+        for component in &self.body {
+            writeln!(f, "{}", component)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -151,11 +227,27 @@ pub struct AssignmentHDL {
     pub right: BusHDL,
 }
 
+impl fmt::Display for AssignmentHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} <= {};", self.left, self.right)
+    }
+}
+
 #[derive(Serialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BusHDL {
     pub name: String,
     pub start: Option<GenericWidth>,
     pub end: Option<GenericWidth>,
+}
+
+impl fmt::Display for BusHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let (Some(start), Some(end)) = (&self.start, &self.end) {
+            write!(f, "{}[{}..{}]", self.name, start, end)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
 }
 
 //  Not(in=sel, out=notSel); has two wires { name : "sel", port: "in" }, { name : "notSel", port: "out" }
@@ -164,6 +256,12 @@ pub struct PortMappingHDL {
     pub wire_ident: Identifier,
     pub wire: BusHDL,
     pub port: BusHDL,
+}
+
+impl fmt::Display for PortMappingHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}={}", self.port, self.wire_ident)
+    }
 }
 
 /// Parses and on-disk HDL file.

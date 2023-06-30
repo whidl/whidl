@@ -1,9 +1,9 @@
-use std::error::Error;
+use std::{error::Error, rc::Rc};
 
-use crate::parser::ChipHDL;
+use crate::parser::{ChipHDL, HdlProvider};
 
 /// A trait representing an optimization pass on an HDL Chip.
 pub trait OptimizationPass {
     /// Apply the optimization pass to the given HDL chip, returning a new, optimized chip.
-    fn apply(&self, chip: &ChipHDL) -> Result<ChipHDL, Box<dyn Error>>;
+    fn apply(&mut self, chip: &ChipHDL, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Box<dyn Error>>;
 }
