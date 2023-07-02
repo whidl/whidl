@@ -37,7 +37,6 @@ impl OptimizationPass for PortMapDedupe {
                     let (new_comp, new_signals) =
                         self.process_component(comp, &mut new_assignments, provider)?;
                     new_chip.parts.push(Part::Component(new_comp));
-                    new_assignments.extend(new_signals);
                 }
                 Part::Loop(loop_part) => {
                     let mut new_loop_body = vec![];
@@ -45,7 +44,6 @@ impl OptimizationPass for PortMapDedupe {
                         let (new_comp, new_signals) =
                             self.process_component(comp, &mut new_assignments, provider)?;
                         new_loop_body.push(new_comp);
-                        new_assignments.extend(new_signals);
                     }
                     new_chip.parts.push(Part::Loop(Loop {
                         body: new_loop_body,
