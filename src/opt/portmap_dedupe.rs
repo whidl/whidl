@@ -34,15 +34,18 @@ impl OptimizationPass for PortMapDedupe {
         for part in &chip.parts {
             match part {
                 Part::Component(comp) => {
-                    let new_comp = self.process_component(comp, &mut new_assignments, provider)?;
+                    let (new_comp, new_signals) =
+                        self.process_component(comp, &mut new_assignments, provider)?;
                     new_chip.parts.push(Part::Component(new_comp));
+                    new_assignments.extend(new_signals);
                 }
                 Part::Loop(loop_part) => {
                     let mut new_loop_body = vec![];
                     for comp in &loop_part.body {
-                        let new_comp =
+                        let (new_comp, new_signals) =
                             self.process_component(comp, &mut new_assignments, provider)?;
                         new_loop_body.push(new_comp);
+                        new_assignments.extend(new_signals);
                     }
                     new_chip.parts.push(Part::Loop(Loop {
                         body: new_loop_body,
@@ -77,7 +80,7 @@ impl PortMapDedupe {
         comp: &Component,
         new_assignments: &mut Vec<AssignmentHDL>,
         provider: &Rc<dyn HdlProvider>,
-    ) -> Result<Component, Box<dyn Error>> {
+    ) -> Result<(Component, Vec<AssignmentHDL>), Box<dyn Error>> {
         self.component_counter += 1;
 
         // The new component that we are constructing.
@@ -152,6 +155,6 @@ impl PortMapDedupe {
             }
         }
 
-        Ok(new_comp)
+        Ok((new_comp, new_assignments.clone()))
     }
 }
