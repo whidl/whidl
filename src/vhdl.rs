@@ -414,7 +414,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     fn try_from(raw_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
         let mut dedupe_pass = PortMapDedupe::new();
         let chip_hdl = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
-        println!("{}", chip_hdl);
 
         let chip = Chip::new(
             chip_hdl,
