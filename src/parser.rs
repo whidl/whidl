@@ -197,7 +197,7 @@ impl fmt::Display for Component {
             }
             write!(f, "{}", mapping)?;
         }
-        write!(f, ")")
+        write!(f, ");")
     }
 }
 
