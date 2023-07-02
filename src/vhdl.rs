@@ -11,6 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
 use std::path::PathBuf;
 use std::ptr;
+use std::rc::Rc;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::opt::optimization::OptimizationPass;
@@ -441,6 +442,8 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &Vec::new(),
         )?;
 
+        let dependencies = get_all_dependencies(&chip_hdl, &chip_hdl.provider)?;
+
         let ports_ref = &ports;
 
         let signals = inferred_widths
@@ -451,15 +454,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
                 width: signal_width.clone(),
             })
             .collect();
-
-        let dependencies: HashSet<VhdlEntity> = vhdl_components
-            .iter()
-            .map(|component| {
-                let component_hdl = get_hdl(&component.unit, &chip_hdl.provider).unwrap();
-                VhdlEntity::try_from(&component_hdl)
-            })
-            .collect::<Result<HashSet<VhdlEntity>, Box<dyn Error>>>()?;
-
         let mut statements: Vec<Statement> = vhdl_components
             .into_iter()
             .map(Statement::Component)
@@ -476,7 +470,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
                 }
                 _ => {}
             }
-            // FINISH`
         }
 
         Ok(VhdlEntity {
@@ -489,6 +482,36 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             chip,
         })
     }
+}
+
+fn get_all_dependencies(
+    chip: &ChipHDL,
+    provider: &Rc<dyn HdlProvider>,
+) -> Result<HashSet<VhdlEntity>, Box<dyn Error>> {
+    let mut dependencies = HashSet::new();
+
+    for part in &chip.parts {
+        match part {
+            Part::Component(component) => {
+                let component_hdl = get_hdl(&component.name.value, provider)?;
+                let current_entity = VhdlEntity::try_from(&component_hdl)?;
+                dependencies.insert(current_entity);
+
+                let sub_dependencies = get_all_dependencies(&component_hdl, provider)?;
+                dependencies.extend(sub_dependencies);
+            }
+            Part::Loop(loop_hdl) => {
+                for subpart in &loop_hdl.body {
+                    let component_hdl = get_hdl(&subpart.name.value, provider)?;
+                    let sub_dependencies = get_all_dependencies(&component_hdl, provider)?;
+                    dependencies.extend(sub_dependencies);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(dependencies)
 }
 
 fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappingHDL>> {
@@ -619,12 +642,6 @@ impl QuartusProject {
     }
 }
 
-/// Creates a quartus prime project inside project_dir
-///
-/// - `chip`: The parsed HDL of the top-level chip to convert to VHDL.
-/// ` `chips_vhdl`: The VHDL files (strings) of all supporting chips.
-/// - `project_dir` - The directory to place the quartus prime project. This
-///                 directory should already exist.
 pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> {
     let mut tcl = format!("project_new {} -overwrite", &qp.chip_vhdl.name);
 
@@ -931,7 +948,7 @@ end architecture arch;
         // Convert HDL to VHDL (VHDl synthesis).
         let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
 
-        let next_filename = next_chip_name.clone() + ".vhdl";
+        let next_filename = next_chip_name + ".vhdl";
         let mut next_file = File::create(qp.project_dir.join(&next_filename))?;
         next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
 
