@@ -173,7 +173,7 @@ impl fmt::Display for IdStatement {
         match &self.stmt {
             Statement::Component(x) => write!(f, "cn2v{}: {}", self.id, x),
             Statement::Process(x) => write!(f, "cn2v{}: {}", self.id, x),
-            Statement::Assignment(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Assignment(x) => write!(f, "{}", x),
             Statement::Assert(x) => write!(f, "cn2v{}: {}", self.id, x),
             Statement::Wait(x) => write!(f, "cn2v{}: {}", self.id, x),
         }
@@ -460,10 +460,24 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             })
             .collect::<Result<HashSet<VhdlEntity>, Box<dyn Error>>>()?;
 
-        let statements: Vec<Statement> = vhdl_components
+        let mut statements: Vec<Statement> = vhdl_components
             .into_iter()
             .map(Statement::Component)
             .collect();
+
+        // Synthesize assignments. Assignments were added after components
+        // and are handled a little differently because they don't instantiate
+        // a chip.
+        for assignment in &chip_hdl.parts {
+            match assignment {
+                Part::AssignmentHDL(assignment) => {
+                    let assignment = AssignmentVHDL::from(assignment);
+                    statements.push(Statement::Assignment(assignment));
+                }
+                _ => {}
+            }
+            // FINISH`
+        }
 
         Ok(VhdlEntity {
             name: chip_hdl.name.clone(),
@@ -582,6 +596,15 @@ impl From<&PortMappingHDL> for PortMappingVHDL {
             wire_name: pm.wire.name.clone(),
             port: SliceVHDL::from(&pm.port),
             wire,
+        }
+    }
+}
+
+impl From<&AssignmentHDL> for AssignmentVHDL {
+    fn from(assignment: &AssignmentHDL) -> Self {
+        AssignmentVHDL {
+            left: SliceVHDL::from(&assignment.left),
+            right: SignalRhs::Slice(SliceVHDL::from(&assignment.right)),
         }
     }
 }
