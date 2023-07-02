@@ -442,7 +442,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &Vec::new(),
         )?;
 
-        let dependencies = get_all_dependencies(&chip_hdl, &chip_hdl.provider)?;
+        let dependencies = get_all_dependencies(chip_hdl, &chip_hdl.provider)?;
 
         let ports_ref = &ports;
 
@@ -463,12 +463,9 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         // and are handled a little differently because they don't instantiate
         // a chip.
         for assignment in &chip_hdl.parts {
-            match assignment {
-                Part::AssignmentHDL(assignment) => {
-                    let assignment = AssignmentVHDL::from(assignment);
-                    statements.push(Statement::Assignment(assignment));
-                }
-                _ => {}
+            if let Part::AssignmentHDL(assignment) = assignment {
+                let assignment = AssignmentVHDL::from(assignment);
+                statements.push(Statement::Assignment(assignment));
             }
         }
 

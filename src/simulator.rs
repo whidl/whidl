@@ -1114,12 +1114,11 @@ fn optimize_circuit(circuit: &mut Circuit) {
     // each node index and get the neighbor edges for that node via
     // a detached iterator to avoid borrowing from the graph.
     for node_idx in all_nodes {
-        let neighbors: HashSet<NodeIndex> = circuit.neighbors(node_idx).into_iter().collect();
+        let neighbors: HashSet<NodeIndex> = circuit.neighbors(node_idx).collect();
         for neighbor in neighbors {
             // Edges connecting the two neighboring nodes
             let mut connecting_edges: Vec<EdgeIndex> = circuit
                 .edges_connecting(node_idx, neighbor)
-                .into_iter()
                 .map(|x| x.id())
                 .collect();
 
@@ -1669,25 +1668,22 @@ pub fn infer_widths(
                 }
             }
             for a in assignments {
-                match (
+                if let (None, None) = (
                     inferred_widths.get(&a.left.name.clone()),
                     inferred_widths.get(&a.right.name.clone()),
                 ) {
                     // If neither widths have a source, throw an error. This allows us to make assumptions about widths later on.
-                    (None, None) => {
-                        return Err(Box::new(N2VError {
-                            msg: format!(
-                                "Signals {} and {} have no source or destination.",
-                                &a.left.name.clone(),
-                                &a.right.name.clone(),
-                            ),
-                            kind: ErrorKind::ParseIdentError(
-                                provider.clone(),
-                                Identifier::from(a.right.name.clone().as_str()),
-                            ),
-                        }));
-                    }
-                    _ => {}
+                    return Err(Box::new(N2VError {
+                        msg: format!(
+                            "Signals {} and {} have no source or destination.",
+                            &a.left.name.clone(),
+                            &a.right.name.clone(),
+                        ),
+                        kind: ErrorKind::ParseIdentError(
+                            provider.clone(),
+                            Identifier::from(a.right.name.clone().as_str()),
+                        ),
+                    }));
                 }
             }
             break;
@@ -1701,11 +1697,8 @@ pub fn infer_widths(
 pub fn gather_assignments(parts: &Vec<Part>) -> Vec<AssignmentHDL> {
     let mut assignment_vec = Vec::new();
     for part in parts {
-        match part {
-            Part::AssignmentHDL(pa) => {
-                assignment_vec.push(pa.clone());
-            }
-            _ => {}
+        if let Part::AssignmentHDL(pa) = part {
+            assignment_vec.push(pa.clone());
         }
     }
 
