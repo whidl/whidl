@@ -16,6 +16,7 @@ use std::rc::Rc;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::opt::optimization::OptimizationPass;
 use crate::opt::portmap_dedupe::PortMapDedupe;
+use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
 use crate::simulator::infer_widths;
 use crate::simulator::Chip;
@@ -413,7 +414,10 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
     fn try_from(raw_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
         let mut dedupe_pass = PortMapDedupe::new();
-        let chip_hdl = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
+        let (chip_hdl, _) = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
+
+        let mut sequential_pass = SequentialPass::new();
+        sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
 
         let chip = Chip::new(
             chip_hdl,
@@ -480,7 +484,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
     }
 }
 
-fn get_all_dependencies(
+pub fn get_all_dependencies(
     chip: &ChipHDL,
     provider: &Rc<dyn HdlProvider>,
 ) -> Result<HashSet<VhdlEntity>, Box<dyn Error>> {

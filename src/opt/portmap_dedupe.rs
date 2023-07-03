@@ -11,20 +11,20 @@ use crate::parser::{
     PortDirection, PortMappingHDL,
 };
 use std::error::Error;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use super::optimization::OptimizationInfo;
 
 pub struct PortMapDedupe {
     component_counter: u32,
 }
-
-use std::collections::HashMap;
-use std::rc::Rc;
-
 impl OptimizationPass for PortMapDedupe {
     fn apply(
         &mut self,
         chip: &ChipHDL,
         provider: &Rc<dyn HdlProvider>,
-    ) -> Result<ChipHDL, Box<dyn Error>> {
+    ) -> Result<(ChipHDL, OptimizationInfo), Box<(dyn Error)>> {
         let mut new_chip = ChipHDL {
             parts: vec![],
             ..chip.clone()
@@ -58,7 +58,7 @@ impl OptimizationPass for PortMapDedupe {
             new_chip.parts.push(Part::AssignmentHDL(assignment));
         }
 
-        Ok(new_chip)
+        Ok((new_chip, OptimizationInfo::None))
     }
 }
 

@@ -1,9 +1,19 @@
-use std::{error::Error, rc::Rc};
-
 use crate::parser::{ChipHDL, HdlProvider};
+use std::{collections::HashMap, error::Error, rc::Rc};
 
-/// A trait representing an optimization pass on an HDL Chip.
+pub type SequentialFlagMap = HashMap<String, bool>;
+
+/// Extra info that can be returned by an optimization pass.
+pub enum OptimizationInfo {
+    None,
+    SequentialFlagMap(SequentialFlagMap),
+}
+
+/// All HDL passes must implement this trait.
 pub trait OptimizationPass {
-    /// Apply the optimization pass to the given HDL chip, returning a new, optimized chip.
-    fn apply(&mut self, chip: &ChipHDL, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Box<dyn Error>>;
+    fn apply(
+        &mut self, 
+        chip: &ChipHDL, 
+        provider: &Rc<dyn HdlProvider>
+    ) -> Result<(ChipHDL, OptimizationInfo), Box<dyn Error>>;
 }
