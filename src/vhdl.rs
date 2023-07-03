@@ -417,19 +417,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         let mut dedupe_pass = PortMapDedupe::new();
         let (chip_hdl, _) = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
 
-        let mut sequential_pass = SequentialPass::new();
-        if let (_, SequentialFlagMap(sequential_flag_map)) =
-            sequential_pass.apply(chip_hdl, &chip_hdl.provider)?
-        {
-            if sequential_flag_map.contains_key(&chip_hdl.name) {
-                return Err(format!(
-                    "Chip {} is sequential, but sequential chips are not supported yet.",
-                    chip_hdl.name
-                )
-                .into());
-            }
-        }
-
         let chip = Chip::new(
             chip_hdl,
             ptr::null_mut(),
@@ -449,6 +436,22 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         }
 
         // Create a clock port if this is a sequential chip.
+        let mut sequential_pass = SequentialPass::new();
+        if let (_, SequentialFlagMap(sequential_flag_map)) =
+            sequential_pass.apply(chip_hdl, &chip_hdl.provider)?
+        {
+            if sequential_flag_map.get(&chip_hdl.name) == Some(&true) {
+                let clock_port = VhdlPort {
+                    name: "clk".to_string(),
+                    width: GenericWidth::Terminal(Terminal::Num(1)),
+                    direction: PortDirection::In,
+                };
+
+                ports.push(clock_port);
+            }
+        } else {
+            panic!();
+        }
 
         let inferred_widths = infer_widths(
             chip_hdl,
