@@ -22,9 +22,15 @@ impl OptimizationPass for SequentialPass {
         chip: &ChipHDL,
         provider: &Rc<dyn HdlProvider>,
     ) -> Result<(ChipHDL, OptimizationInfo), Box<(dyn Error)>> {
+        // Traverse the chip to identify sequential components.
+        for part in &chip.parts {
+            self.traverse(part, provider)?;
+        }
+
         Ok((chip.clone(), OptimizationInfo::SequentialFlagMap(self.sequential_flag_map.clone())))
     }
 }
+
 
 impl SequentialPass {
     pub fn new() -> Self {
