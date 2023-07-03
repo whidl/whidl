@@ -14,6 +14,7 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
+use crate::opt::optimization::OptimizationInfo::SequentialFlagMap;
 use crate::opt::optimization::OptimizationPass;
 use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
@@ -417,7 +418,17 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         let (chip_hdl, _) = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
 
         let mut sequential_pass = SequentialPass::new();
-        sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
+        if let (_, SequentialFlagMap(sequential_flag_map)) =
+            sequential_pass.apply(chip_hdl, &chip_hdl.provider)?
+        {
+            if sequential_flag_map.contains_key(&chip_hdl.name) {
+                return Err(format!(
+                    "Chip {} is sequential, but sequential chips are not supported yet.",
+                    chip_hdl.name
+                )
+                .into());
+            }
+        }
 
         let chip = Chip::new(
             chip_hdl,
@@ -436,6 +447,8 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
         for port in &chip_hdl.ports {
             ports.push(VhdlPort::from(port));
         }
+
+        // Create a clock port if this is a sequential chip.
 
         let inferred_widths = infer_widths(
             chip_hdl,
