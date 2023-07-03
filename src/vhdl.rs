@@ -879,16 +879,16 @@ use ieee.std_logic_1164.all;
 LIBRARY altera;
 USE altera.altera_primitives_components.all;
 
-entity DFF_n2v is
+entity dff_n2v is
 port (in_n2v : in std_logic_vector(0 downto 0);
 out_n2v : out std_logic_vector(0 downto 0);
 clk : in std_logic_vector(0 downto 0)
 );
-end entity DFF_n2v;
+end entity dff_n2v;
 
-architecture arch of DFF_n2v is
+architecture arch of dff_n2v is
 
-COMPONENT DFF
+COMPONENT dff 
    PORT (d   : IN STD_LOGIC;
         clk  : IN STD_LOGIC;
         clrn : IN STD_LOGIC;
@@ -898,7 +898,7 @@ COMPONENT DFF
 END COMPONENT;
 
 begin
-x0: DFF port map (d => in_n2v(0), clrn => '1', prn => '1', q => out_n2v(0), clk => clk(0));
+x0: dff port map (d => in_n2v(0), clrn => '1', prn => '1', q => out_n2v(0), clk => clk(0));
 end architecture arch;
 "#;
 
@@ -918,7 +918,7 @@ end architecture arch;
     // convert each chip type once.
     let mut done: HashSet<String> = HashSet::new();
     done.insert(String::from("Nand"));
-    done.insert(String::from("DFF"));
+    done.insert(String::from("dff"));
 
     // Recursively parse and write all dependency components.
     // Worklist is set of chip names that we need to convert from HDL to VHDL.
@@ -985,7 +985,7 @@ pub fn keyw(name: &str) -> String {
         "or" => String::from("or_n2v"),
         "xor" => String::from("xor_n2v"),
         "nor" => String::from("nor_n2v"),
-        "dff" => String::from("DFF_n2v"),
+        "dff" => String::from("dff_n2v"),
         "register" => String::from("register_n2v"),
         _ => String::from(name),
     }
