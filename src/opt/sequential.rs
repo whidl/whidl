@@ -2,11 +2,14 @@
 //!
 //! This pass identifies which components are sequential.
 
-use std::{collections::HashMap, rc::Rc};
 use std::error::Error;
+use std::{collections::HashMap, rc::Rc};
 
-use crate::parser::{Part, Component, get_hdl};
-use crate::{opt::optimization::OptimizationPass, parser::{ChipHDL, HdlProvider}};
+use crate::parser::{get_hdl, Component, Part};
+use crate::{
+    opt::optimization::OptimizationPass,
+    parser::{ChipHDL, HdlProvider},
+};
 
 use super::optimization::OptimizationInfo;
 
@@ -23,9 +26,13 @@ impl OptimizationPass for SequentialPass {
         provider: &Rc<dyn HdlProvider>,
     ) -> Result<(ChipHDL, OptimizationInfo), Box<(dyn Error)>> {
         // Traverse the chip to identify sequential components.
+        let mut chip_sequential = false;
         for part in &chip.parts {
-            self.traverse(part, provider)?;
+            chip_sequential |= self.traverse(part, provider)?;
         }
+
+        // If any part of the chip is sequential, the chip is sequential.
+        self.sequential_flag_map.insert(chip.name.clone(), chip_sequential);
 
         Ok((chip.clone(), OptimizationInfo::SequentialFlagMap(self.sequential_flag_map.clone())))
     }
@@ -39,49 +46,55 @@ impl SequentialPass {
         }
     }
 
-    /// Recursive function to traverse the dependencies of a part.
-    ///
-    /// This function will check if the part is a sequential chip. If it is, it will
-    /// mark the corresponding entry in the sequential_flag_map as true. Then, it will
-    /// call itself on each of the part's dependencies.
-    fn traverse(&mut self, part: &Part, provider: &Rc<dyn HdlProvider>) -> Result<(), Box<dyn Error>> {
+    fn traverse(
+        &mut self,
+        part: &Part,
+        provider: &Rc<dyn HdlProvider>,
+    ) -> Result<bool, Box<dyn Error>> {
         match part {
             Part::Loop(loop_part) => {
-                // Loops have a body that needs to be traversed
-                // Traverse each component in the loop body.
+                let mut loop_sequential = false;
                 for component_in_loop in &loop_part.body {
-                    self.process_component(component_in_loop, provider)?;
+                    loop_sequential |= self.process_component(component_in_loop, provider)?;
                 }
+                Ok(loop_sequential)
             }
             Part::Component(component) => {
-                // Components can have dependencies that need to be traversed.
-                self.process_component(component, provider)?;
+                let is_sequential = self.process_component(component, provider)?;
+                Ok(is_sequential)
             }
-            Part::AssignmentHDL(_) => {
-                // Assignments don't have dependencies, so we don't need to traverse them.
-            }
+            Part::AssignmentHDL(_) => Ok(false),
         }
-        Ok(())
     }
 
-    /// Process a single component: retrieve its ChipHDL, process its dependencies, 
-    /// and determine if it is sequential.
-    fn process_component(&mut self, component: &Component, provider: &Rc<dyn HdlProvider>) -> Result<(), Box<dyn Error>> {
+    fn process_component(
+        &mut self,
+        component: &Component,
+        provider: &Rc<dyn HdlProvider>,
+    ) -> Result<bool, Box<dyn Error>> {
         // Get the ChipHDL of the component
         let component_chip = get_hdl(&component.name.value, provider)?;
 
         // Traverse in post-order, so process dependencies first.
+        let mut component_sequential = false;
         for dependency in self.get_all_dependencies(&component_chip)? {
-            self.traverse(&dependency, provider)?;
+            component_sequential |= self.traverse(&dependency, provider)?;
         }
 
-        // If any of the dependencies are sequential, or the part is a DFF, then the part is sequential.
-        let is_sequential = self.is_sequential(&component_chip);
+        // If the component itself is sequential, or any of its children are, then it's sequential.
+        component_sequential |= self.is_sequential(&component_chip);
 
         // Update the sequential_flag_map
-        self.sequential_flag_map.insert(component.name.value.clone(), is_sequential);
+        self.sequential_flag_map
+            .insert(component.name.value.clone(), component_sequential);
 
-        Ok(())
+        Ok(component_sequential)
+    }
+
+    /// Function to determine if a chip is sequential.
+    /// Currently, it only checks if the chip is a DFF.
+    fn is_sequential(&self, chip: &ChipHDL) -> bool {
+        chip.name == "DFF"
     }
 
     fn get_all_dependencies(&self, chip: &ChipHDL) -> Result<Vec<Part>, Box<dyn Error>> {
@@ -92,11 +105,5 @@ impl SequentialPass {
             }
         }
         Ok(dependencies)
-    }
-
-    /// Function to determine if a chip is sequential. 
-    /// Currently, it only checks if the chip is a DFF.
-    fn is_sequential(&self, chip: &ChipHDL) -> bool {
-        chip.name == "DFF"
     }
 }
