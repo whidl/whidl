@@ -322,11 +322,15 @@ impl VhdlEntity {
         if chip_hdl.is_none() {
             return Ok(String::new());
         }
-        let chip_hdl_some = chip_hdl.as_ref().unwrap(); 
+        let chip_hdl_some = chip_hdl.as_ref().unwrap();
 
         writeln!(decl, "component {} is", keyw(&dep.name.value))?;
         writeln!(decl, "port (")?;
-        let port_vec: Vec<String> = chip_hdl_some.ports.iter().map(|x| keyw(&x.name.value)).collect();
+        let port_vec: Vec<String> = chip_hdl_some
+            .ports
+            .iter()
+            .map(|x| keyw(&x.name.value))
+            .collect();
         writeln!(decl, "{}", port_vec.join(";\n"))?;
 
         match &self.optimization_info {
@@ -529,8 +533,31 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             .collect();
 
         let mut statements = Vec::new();
-        for c in vhdl_components {
-            statements.push(Statement::Component(c));
+        for c in &mut vhdl_components {
+            // If this is a sequential chip, we need to add a clock port mapping.
+            if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+                &*sequential_pass_info.borrow()
+            {
+                if sequential_flag_map.get(&c.unit) == Some(&true) {
+                    let clock_port_mapping = PortMappingVHDL {
+                        wire_name: "clk".to_string(),
+                        port: SliceVHDL {
+                            name: "clk".to_string(),
+                            start: None,
+                            end: None,
+                        },
+                        wire: SignalRhs::Slice(SliceVHDL {
+                            name: "clk".to_string(),
+                            start: None,
+                            end: None,
+                        }),
+                    };
+
+                    c.port_mappings.push(clock_port_mapping);
+                }
+            }
+
+            statements.push(Statement::Component(c.clone()));
         }
 
         // Synthesize assignments. Assignments were added after components
