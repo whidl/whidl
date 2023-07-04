@@ -32,12 +32,18 @@ impl OptimizationPass for SequentialPass {
         }
 
         // If any part of the chip is sequential, the chip is sequential.
-        self.sequential_flag_map.insert(chip.name.clone(), chip_sequential);
+        // But avoid overwriting existing flags.
+        if !self.sequential_flag_map.contains_key(&chip.name) {
+            self.sequential_flag_map
+                .insert(chip.name.clone(), chip_sequential);
+        }
 
-        Ok((chip.clone(), OptimizationInfo::SequentialFlagMap(self.sequential_flag_map.clone())))
+        Ok((
+            chip.clone(),
+            OptimizationInfo::SequentialFlagMap(self.sequential_flag_map.clone()),
+        ))
     }
 }
-
 
 impl SequentialPass {
     pub fn new() -> Self {
@@ -72,6 +78,11 @@ impl SequentialPass {
         component: &Component,
         provider: &Rc<dyn HdlProvider>,
     ) -> Result<bool, Box<dyn Error>> {
+        // Check if the component has already been processed
+        if let Some(is_sequential) = self.sequential_flag_map.get(&component.name.value) {
+            return Ok(*is_sequential);
+        }
+
         // Get the ChipHDL of the component
         let component_chip = get_hdl(&component.name.value, provider)?;
 
@@ -81,12 +92,19 @@ impl SequentialPass {
             component_sequential |= self.traverse(&dependency, provider)?;
         }
 
-        // If the component itself is sequential, or any of its children are, then it's sequential.
+        // If the component itself is sequential or any of its children are, then it's sequential.
+        println!("Processing component: {}", component.name.value);
         component_sequential |= self.is_sequential(&component_chip);
+        println!("Is component sequential: {}", component_sequential);
 
         // Update the sequential_flag_map
         self.sequential_flag_map
             .insert(component.name.value.clone(), component_sequential);
+
+        println!(
+            "Updated sequential_flag_map: {:?}",
+            self.sequential_flag_map
+        );
 
         Ok(component_sequential)
     }

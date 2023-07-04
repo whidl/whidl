@@ -193,7 +193,6 @@ impl TryFrom<&TestBench> for VhdlEntity {
             ports,
             statements,
             signals,
-            dependencies: HashSet::from([chip_vhdl]),
             optimization_info: None,
             chip,
         })

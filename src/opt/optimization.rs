@@ -4,7 +4,7 @@ use std::{collections::HashMap, error::Error, rc::Rc};
 pub type SequentialFlagMap = HashMap<String, bool>;
 
 /// Extra info that can be returned by an optimization pass.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum OptimizationInfo {
     None,
     SequentialFlagMap(SequentialFlagMap),

@@ -1,6 +1,7 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -9,29 +10,31 @@ use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
 
+use petgraph::graph::{EdgeIndex, NodeIndex};
+
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
-use crate::opt::optimization::OptimizationInfo::{self, SequentialFlagMap};
+use crate::opt::optimization::OptimizationInfo::{self};
 use crate::opt::optimization::OptimizationPass;
 use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
-use crate::simulator::infer_widths;
 use crate::simulator::Chip;
+use crate::simulator::{infer_widths, Port};
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
 pub struct VhdlEntity {
-    pub name: String,                                // The name of this chip.
-    pub generics: Vec<String>,                       // Declared generics.
-    pub ports: Vec<VhdlPort>,                        // Declared ports.
-    pub signals: Vec<Signal>,                        // Declared signals.
-    pub statements: Vec<Statement>,                  // VHDL statements.
-    pub dependencies: HashSet<VhdlEntity>,           // Entities for components.
-    pub optimization_info: Option<OptimizationInfo>, // Extra info from HDL optimization passes.
+    pub name: String,               // The name of this chip.
+    pub generics: Vec<String>,      // Declared generics.
+    pub ports: Vec<VhdlPort>,       // Declared ports.
+    pub signals: Vec<Signal>,       // Declared signals.
+    pub statements: Vec<Statement>, // VHDL statements.
+    pub optimization_info: Option<Rc<RefCell<OptimizationInfo>>>,
     pub chip: Chip,
 }
 impl Hash for VhdlEntity {
@@ -257,9 +260,35 @@ impl fmt::Display for VhdlEntity {
         writeln!(f)?;
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
-        for x in &self.dependencies {
-            writeln!(f, "{}", x.declaration()?)?;
+
+        // Iterate over the HDL components and generate declarations for them.
+        // Use the chip components because they have OptimizationInfo.
+        // TODO: We should really be using the circuit not the components list.
+        let mut seen: HashSet<String> = HashSet::new();
+
+        let all_weights = self.chip.circuit.node_weights();
+        for dep in all_weights {
+            if !seen.contains(&dep.name) {
+                // Insert the component name into the HashSet
+                seen.insert(dep.name.clone());
+
+                // Look up this name in sequential flags map and see if it is sequential.
+                // It is stored as an OptimizationInfo enum in self.optimization_info.
+
+                if let Some(optimization_info) = &self.optimization_info {
+                    let optimization_info_borrowed = optimization_info.borrow();
+                    match &*optimization_info_borrowed {
+                        OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
+                            if seq_flag_map.get(&dep.name) == Some(&true) {
+                                writeln!(f, "{}", self.declaration(&dep.hdl.as_ref().unwrap())?)?;
+                            }
+                        }
+                        _ => {} // Handle non-sequential components if necessary
+                    }
+                }
+            }
         }
+
         for x in &self.signals {
             writeln!(f, "signal {}", x)?;
         }
@@ -280,19 +309,31 @@ impl fmt::Display for VhdlEntity {
 
 // Declaration VHDL for an entity.
 impl VhdlEntity {
-    fn declaration(&self) -> Result<String, std::fmt::Error> {
+    fn declaration(&self, dep: &ChipHDL) -> Result<String, std::fmt::Error> {
         let mut decl = String::new();
 
-        writeln!(decl, "component {} is", keyw(&self.name))?;
+        writeln!(decl, "component {} is", keyw(&dep.name))?;
         writeln!(decl, "port (")?;
-        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
+        let port_vec: Vec<String> = dep.ports.iter().map(|x| keyw(&x.name.value)).collect();
         writeln!(decl, "{}", port_vec.join(";\n"))?;
 
-        // If this entity is sequential, then we need to add a clock.
-        if let Some(SequentialFlagMap(seq_flag_map)) = &self.optimization_info {
-            if seq_flag_map.contains_key(&self.name) {
-                writeln!(decl, "clk : in std_logic;")?;
-            }
+        match &self.optimization_info {
+            Some(info) => match RefCell::borrow(info).deref() {
+                OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
+                    println!(
+                        "Entity: {}, Sequential flag map: {:?}",
+                        &self.name, &self.optimization_info
+                    );
+
+                    if seq_flag_map.get(&self.chip.name) == Some(&true) {
+                        writeln!(decl, "clk : in std_logic;")?;
+                    }
+                    println!("Entity: {}", self.name);
+                    println!("Sequential flag map: {:?}", seq_flag_map);
+                }
+                _ => (),
+            },
+            None => (),
         }
 
         writeln!(decl, ");")?;
@@ -434,9 +475,9 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &Vec::new(),
         )?;
 
-        // Declare components
-        let vhdl_components: Vec<VhdlComponent> =
+        let mut vhdl_components: Vec<VhdlComponent> =
             chip.components.iter().map(VhdlComponent::from).collect();
+
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
 
@@ -446,8 +487,12 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
         // Create a clock port if this is a sequential chip.
         let mut sequential_pass = SequentialPass::new();
-        let (_, sequential_pass_info) = sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
-        if let SequentialFlagMap(sequential_flag_map) = sequential_pass_info.clone() {
+        let (_, sequential_pass_info_raw) = sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
+        let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
+
+        if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+            &*sequential_pass_info.borrow()
+        {
             if sequential_flag_map.get(&chip_hdl.name) == Some(&true) {
                 let clock_port = VhdlPort {
                     name: "clk".to_string(),
@@ -467,8 +512,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             &Vec::new(),
         )?;
 
-        let dependencies = get_all_dependencies(chip_hdl, &chip_hdl.provider)?;
-
         let ports_ref = &ports;
 
         let signals = inferred_widths
@@ -479,10 +522,11 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
                 width: signal_width.clone(),
             })
             .collect();
-        let mut statements: Vec<Statement> = vhdl_components
-            .into_iter()
-            .map(Statement::Component)
-            .collect();
+
+        let mut statements = Vec::new();
+        for c in vhdl_components {
+            statements.push(Statement::Component(c));
+        }
 
         // Synthesize assignments. Assignments were added after components
         // and are handled a little differently because they don't instantiate
@@ -500,41 +544,10 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             ports,
             signals,
             statements,
-            dependencies,
-            optimization_info: Some(sequential_pass_info),
+            optimization_info: Some(Rc::clone(&sequential_pass_info)),
             chip,
         })
     }
-}
-
-pub fn get_all_dependencies(
-    chip: &ChipHDL,
-    provider: &Rc<dyn HdlProvider>,
-) -> Result<HashSet<VhdlEntity>, Box<dyn Error>> {
-    let mut dependencies = HashSet::new();
-
-    for part in &chip.parts {
-        match part {
-            Part::Component(component) => {
-                let component_hdl = get_hdl(&component.name.value, provider)?;
-                let current_entity = VhdlEntity::try_from(&component_hdl)?;
-                dependencies.insert(current_entity);
-
-                let sub_dependencies = get_all_dependencies(&component_hdl, provider)?;
-                dependencies.extend(sub_dependencies);
-            }
-            Part::Loop(loop_hdl) => {
-                for subpart in &loop_hdl.body {
-                    let component_hdl = get_hdl(&subpart.name.value, provider)?;
-                    let sub_dependencies = get_all_dependencies(&component_hdl, provider)?;
-                    dependencies.extend(sub_dependencies);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Ok(dependencies)
 }
 
 fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappingHDL>> {
@@ -855,12 +868,22 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         "set_global_assignment -name VHDL_FILE {}",
         chip_filename
     )?;
-    for dep in &qp.chip_vhdl.dependencies {
-        writeln!(
-            tcl,
-            "set_global_assignment -name VHDL_FILE {}",
-            dep.name.clone() + ".vhdl"
-        )?;
+
+    let unique_component_names: HashSet<String> = qp
+        .chip_vhdl
+        .statements
+        .iter()
+        .filter_map(|statement| {
+            if let Statement::Component(component) = statement {
+                Some(component.unit.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for name in unique_component_names {
+        writeln!(tcl, "set_global_assignment -name VHDL_FILE {}.vhdl", name)?;
     }
 
     let nand_vhdl = r#"
