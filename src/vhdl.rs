@@ -259,18 +259,21 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
 
-        // Iterate over the HDL components and generate declarations for them.
-        // Use the chip components because they have OptimizationInfo.
-        // TODO: We should really be using the circuit not the components list.
-        let mut seen: HashSet<String> = HashSet::new();
+        let entity_name = "DFF_n2v";
+
+        writeln!(f, "component {} is", entity_name)?;
+        writeln!(f, "    port (in_n2v : in std_logic_vector(0 downto 0);")?;
+        writeln!(f, "    out_n2v : out std_logic_vector(0 downto 0);")?;
+        writeln!(f, "    clk : in std_logic_vector(0 downto 0)")?;
+        writeln!(f, "    );")?;
+        writeln!(f, "end component {};", entity_name)?;
 
         // We need to iterate over HDL parts in order to generate declarations for them.
-        // The hope is that the HDL parts have optimization info attached to them.
         let mut seen = HashSet::new();
         for part in &self.chip.hdl.as_ref().unwrap().parts {
             match part {
                 Part::Component(component) => {
-                    if seen.insert(&component.name) {
+                    if seen.insert(&component.name.value) {
                         // If it's a Component, we generate its declaration
                         let decl = self.declaration(component)?;
                         writeln!(f, "{}", decl)?;
@@ -278,7 +281,7 @@ impl fmt::Display for VhdlEntity {
                 }
                 Part::Loop(loop_hdl) => {
                     for component in &loop_hdl.body {
-                        if seen.insert(&component.name) {
+                        if seen.insert(&component.name.value) {
                             let decl = self.declaration(component)?;
                             writeln!(f, "{}", decl)?;
                         }
