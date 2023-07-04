@@ -346,7 +346,7 @@ impl VhdlEntity {
         }
 
         writeln!(decl, ");")?;
-        writeln!(decl, "end component {};", keyw(&self.name))?;
+        writeln!(decl, "end component {};", keyw(&dep.name.value))?;
 
         Ok(decl)
     }
