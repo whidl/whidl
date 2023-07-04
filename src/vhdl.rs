@@ -260,11 +260,18 @@ impl fmt::Display for VhdlEntity {
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
 
         let entity_name = "DFF_n2v";
-
         writeln!(f, "component {} is", entity_name)?;
         writeln!(f, "    port (in_n2v : in std_logic_vector(0 downto 0);")?;
         writeln!(f, "    out_n2v : out std_logic_vector(0 downto 0);")?;
         writeln!(f, "    clk : in std_logic_vector(0 downto 0)")?;
+        writeln!(f, "    );")?;
+        writeln!(f, "end component {};", entity_name)?;
+
+        let entity_name = "nand_n2v";
+        writeln!(f, "component {} is", entity_name)?;
+        writeln!(f, "    port (a : in std_logic_vector(0 downto 0);")?;
+        writeln!(f, "          b : in std_logic_vector(0 downto 0);")?;
+        writeln!(f, "          out_n2v : out std_logic_vector(0 downto 0)")?;
         writeln!(f, "    );")?;
         writeln!(f, "end component {};", entity_name)?;
 
@@ -898,6 +905,7 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         keyw(&qp.chip_vhdl.name)
     )?;
 
+    writeln!(tcl, "set_global_assignment -name VHDL_FILE NAND.vhdl");
     let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
     writeln!(
         tcl,
@@ -905,21 +913,16 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         chip_filename
     )?;
 
-    let unique_component_names: HashSet<String> = qp
-        .chip_vhdl
-        .statements
-        .iter()
-        .filter_map(|statement| {
-            if let Statement::Component(component) = statement {
-                Some(component.unit.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
+    // Run the sequential pass on chip HDL
+    let mut sequential_pass = SequentialPass::new();
+    let (_, sequential_pass_info_raw) = sequential_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
+    let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
 
-    for name in unique_component_names {
-        writeln!(tcl, "set_global_assignment -name VHDL_FILE {}.vhdl", name)?;
+    if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+        &*sequential_pass_info.borrow() {
+        for name in sequential_flag_map.keys() {
+            writeln!(tcl, "set_global_assignment -name VHDL_FILE {}.vhdl", name)?;
+        }
     }
 
     let nand_vhdl = r#"
