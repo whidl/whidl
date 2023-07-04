@@ -14,7 +14,7 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
-use crate::opt::optimization::OptimizationInfo::SequentialFlagMap;
+use crate::opt::optimization::OptimizationInfo::{self, SequentialFlagMap};
 use crate::opt::optimization::OptimizationPass;
 use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
@@ -25,12 +25,13 @@ use crate::Scanner;
 
 // ========= STRUCTS ========== //
 pub struct VhdlEntity {
-    pub name: String,                      // The name of this chip.
-    pub generics: Vec<String>,             // Declared generics.
-    pub ports: Vec<VhdlPort>,              // Declared ports.
-    pub signals: Vec<Signal>,              // Declared signals.
-    pub statements: Vec<Statement>,        // VHDL statements.
-    pub dependencies: HashSet<VhdlEntity>, // Entities for components.
+    pub name: String,                                // The name of this chip.
+    pub generics: Vec<String>,                       // Declared generics.
+    pub ports: Vec<VhdlPort>,                        // Declared ports.
+    pub signals: Vec<Signal>,                        // Declared signals.
+    pub statements: Vec<Statement>,                  // VHDL statements.
+    pub dependencies: HashSet<VhdlEntity>,           // Entities for components.
+    pub optimization_info: Option<OptimizationInfo>, // Extra info from HDL optimization passes.
     pub chip: Chip,
 }
 impl Hash for VhdlEntity {
@@ -286,6 +287,14 @@ impl VhdlEntity {
         writeln!(decl, "port (")?;
         let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
         writeln!(decl, "{}", port_vec.join(";\n"))?;
+
+        // If this entity is sequential, then we need to add a clock.
+        if let Some(SequentialFlagMap(seq_flag_map)) = &self.optimization_info {
+            if seq_flag_map.contains_key(&self.name) {
+                writeln!(decl, "clk : in std_logic;")?;
+            }
+        }
+
         writeln!(decl, ");")?;
         writeln!(decl, "end component {};", keyw(&self.name))?;
 
@@ -437,9 +446,8 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
         // Create a clock port if this is a sequential chip.
         let mut sequential_pass = SequentialPass::new();
-        if let (_, SequentialFlagMap(sequential_flag_map)) =
-            sequential_pass.apply(chip_hdl, &chip_hdl.provider)?
-        {
+        let (_, sequential_pass_info) = sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
+        if let SequentialFlagMap(sequential_flag_map) = sequential_pass_info.clone() {
             if sequential_flag_map.get(&chip_hdl.name) == Some(&true) {
                 let clock_port = VhdlPort {
                     name: "clk".to_string(),
@@ -449,8 +457,6 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
 
                 ports.push(clock_port);
             }
-        } else {
-            panic!();
         }
 
         let inferred_widths = infer_widths(
@@ -495,6 +501,7 @@ impl TryFrom<&ChipHDL> for VhdlEntity {
             signals,
             statements,
             dependencies,
+            optimization_info: Some(sequential_pass_info),
             chip,
         })
     }

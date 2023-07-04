@@ -194,6 +194,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
             statements,
             signals,
             dependencies: HashSet::from([chip_vhdl]),
+            optimization_info: None,
             chip,
         })
     }
