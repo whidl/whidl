@@ -326,12 +326,13 @@ impl VhdlEntity {
 
         writeln!(decl, "component {} is", keyw(&dep.name.value))?;
         writeln!(decl, "port (")?;
-        let port_vec: Vec<String> = chip_hdl_some
+
+        let vhdl_ports: Vec<String> = chip_hdl_some
             .ports
             .iter()
-            .map(|x| keyw(&x.name.value))
+            .map(|port| VhdlPort::from(port).to_string())
             .collect();
-        writeln!(decl, "{}", port_vec.join(";\n"))?;
+        writeln!(decl, "{}", vhdl_ports.join(";\n"))?;
 
         match &self.optimization_info {
             Some(info) => match RefCell::borrow(info).deref() {
