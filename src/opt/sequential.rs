@@ -93,18 +93,11 @@ impl SequentialPass {
         }
 
         // If the component itself is sequential or any of its children are, then it's sequential.
-        println!("Processing component: {}", component.name.value);
         component_sequential |= self.is_sequential(&component_chip);
-        println!("Is component sequential: {}", component_sequential);
 
         // Update the sequential_flag_map
         self.sequential_flag_map
             .insert(component.name.value.clone(), component_sequential);
-
-        println!(
-            "Updated sequential_flag_map: {:?}",
-            self.sequential_flag_map
-        );
 
         Ok(component_sequential)
     }

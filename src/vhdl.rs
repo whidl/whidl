@@ -332,16 +332,9 @@ impl VhdlEntity {
         match &self.optimization_info {
             Some(info) => match RefCell::borrow(info).deref() {
                 OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
-                    println!(
-                        "Entity: {}, Sequential flag map: {:?}",
-                        &self.name, &self.optimization_info
-                    );
-
-                    if seq_flag_map.get(&self.chip.name) == Some(&true) {
+                    if seq_flag_map.get(&dep.name.value) == Some(&true) {
                         writeln!(decl, "clk : in std_logic;")?;
                     }
-                    println!("Entity: {}", self.name);
-                    println!("Sequential flag map: {:?}", seq_flag_map);
                 }
                 _ => (),
             },
