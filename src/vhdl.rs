@@ -259,22 +259,6 @@ impl fmt::Display for VhdlEntity {
 
         writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
 
-        let entity_name = "DFF_n2v";
-        writeln!(f, "component {} is", entity_name)?;
-        writeln!(f, "    port (in_n2v : in std_logic_vector(0 downto 0);")?;
-        writeln!(f, "    out_n2v : out std_logic_vector(0 downto 0);")?;
-        writeln!(f, "    clk : in std_logic_vector(0 downto 0)")?;
-        writeln!(f, "    );")?;
-        writeln!(f, "end component {};", entity_name)?;
-
-        let entity_name = "nand_n2v";
-        writeln!(f, "component {} is", entity_name)?;
-        writeln!(f, "    port (a : in std_logic_vector(0 downto 0);")?;
-        writeln!(f, "          b : in std_logic_vector(0 downto 0);")?;
-        writeln!(f, "          out_n2v : out std_logic_vector(0 downto 0)")?;
-        writeln!(f, "    );")?;
-        writeln!(f, "end component {};", entity_name)?;
-
         // We need to iterate over HDL parts in order to generate declarations for them.
         let mut seen = HashSet::new();
         for part in &self.chip.hdl.as_ref().unwrap().parts {
@@ -282,14 +266,14 @@ impl fmt::Display for VhdlEntity {
                 Part::Component(component) => {
                     if seen.insert(&component.name.value) {
                         // If it's a Component, we generate its declaration
-                        let decl = self.declaration(component)?;
+                        let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
                         writeln!(f, "{}", decl)?;
                     }
                 }
                 Part::Loop(loop_hdl) => {
                     for component in &loop_hdl.body {
                         if seen.insert(&component.name.value) {
-                            let decl = self.declaration(component)?;
+                            let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
                             writeln!(f, "{}", decl)?;
                         }
                     }
@@ -320,24 +304,21 @@ impl fmt::Display for VhdlEntity {
 
 // Declaration VHDL for an entity.
 impl VhdlEntity {
-    fn declaration(&self, dep: &Component) -> Result<String, std::fmt::Error> {
+    fn declaration(
+        &self,
+        dep: &Component,
+        provider: Rc<dyn HdlProvider>,
+    ) -> Result<String, std::fmt::Error> {
         let mut decl = String::new();
 
-        let mut chip_hdl = None;
-        for chip in self.chip.circuit.node_weights() {
-            if chip.name == dep.name.value {
-                chip_hdl = chip.hdl.clone();
-            }
-        }
-        if chip_hdl.is_none() {
-            return Ok(String::new());
-        }
-        let chip_hdl_some = chip_hdl.as_ref().unwrap();
+        // Just parse it again to get the chip_hdl.
+        // It's not ideal, but it's the easiest way to get the chip_hdl for now.
+        let chip_hdl = get_hdl(&dep.name.value, &provider).unwrap();
 
         writeln!(decl, "component {} is", keyw(&dep.name.value))?;
         writeln!(decl, "port (")?;
 
-        let vhdl_ports: Vec<String> = chip_hdl_some
+        let vhdl_ports: Vec<String> = chip_hdl
             .ports
             .iter()
             .map(|port| VhdlPort::from(port).to_string())
@@ -915,11 +896,13 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 
     // Run the sequential pass on chip HDL
     let mut sequential_pass = SequentialPass::new();
-    let (_, sequential_pass_info_raw) = sequential_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
+    let (_, sequential_pass_info_raw) =
+        sequential_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
     let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
 
     if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
-        &*sequential_pass_info.borrow() {
+        &*sequential_pass_info.borrow()
+    {
         for name in sequential_flag_map.keys() {
             writeln!(tcl, "set_global_assignment -name VHDL_FILE {}.vhdl", name)?;
         }
