@@ -168,7 +168,7 @@ pub struct Chip {
     // for lazily elaborating itself. This is reference counted because
     // elaboration makes new chips with HdlProviders and we don't know
     // size at compilation time.
-    hdl_provider: Rc<dyn HdlProvider>,
+    pub hdl_provider: Rc<dyn HdlProvider>,
 
     // Values of variables (generics and iterators)
     variables: HashMap<String, usize>,

@@ -15,8 +15,6 @@ use std::path::PathBuf;
 use std::ptr;
 use std::rc::Rc;
 
-use petgraph::graph::{EdgeIndex, NodeIndex};
-
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
 use crate::opt::optimization::OptimizationInfo::{self};
 use crate::opt::optimization::OptimizationPass;
@@ -266,25 +264,28 @@ impl fmt::Display for VhdlEntity {
         // TODO: We should really be using the circuit not the components list.
         let mut seen: HashSet<String> = HashSet::new();
 
-        let all_weights = self.chip.circuit.node_weights();
-        for dep in all_weights {
-            if !seen.contains(&dep.name) {
-                // Insert the component name into the HashSet
-                seen.insert(dep.name.clone());
-
-                // Look up this name in sequential flags map and see if it is sequential.
-                // It is stored as an OptimizationInfo enum in self.optimization_info.
-
-                if let Some(optimization_info) = &self.optimization_info {
-                    let optimization_info_borrowed = optimization_info.borrow();
-                    match &*optimization_info_borrowed {
-                        OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
-                            if seq_flag_map.get(&dep.name) == Some(&true) {
-                                writeln!(f, "{}", self.declaration(&dep.hdl.as_ref().unwrap())?)?;
-                            }
-                        }
-                        _ => {} // Handle non-sequential components if necessary
+        // We need to iterate over HDL parts in order to generate declarations for them.
+        // The hope is that the HDL parts have optimization info attached to them.
+        let mut seen = HashSet::new();
+        for part in &self.chip.hdl.as_ref().unwrap().parts {
+            match part {
+                Part::Component(component) => {
+                    if seen.insert(&component.name) {
+                        // If it's a Component, we generate its declaration
+                        let decl = self.declaration(component)?;
+                        writeln!(f, "{}", decl)?;
                     }
+                }
+                Part::Loop(loop_hdl) => {
+                    for component in &loop_hdl.body {
+                        if seen.insert(&component.name) {
+                            let decl = self.declaration(component)?;
+                            writeln!(f, "{}", decl)?;
+                        }
+                    }
+                }
+                Part::AssignmentHDL(_) => {
+                    // Do nothing for AssignmentHDL
                 }
             }
         }
@@ -309,12 +310,23 @@ impl fmt::Display for VhdlEntity {
 
 // Declaration VHDL for an entity.
 impl VhdlEntity {
-    fn declaration(&self, dep: &ChipHDL) -> Result<String, std::fmt::Error> {
+    fn declaration(&self, dep: &Component) -> Result<String, std::fmt::Error> {
         let mut decl = String::new();
 
-        writeln!(decl, "component {} is", keyw(&dep.name))?;
+        let mut chip_hdl = None;
+        for chip in self.chip.circuit.node_weights() {
+            if chip.name == dep.name.value {
+                chip_hdl = chip.hdl.clone();
+            }
+        }
+        if chip_hdl.is_none() {
+            return Ok(String::new());
+        }
+        let chip_hdl_some = chip_hdl.as_ref().unwrap(); 
+
+        writeln!(decl, "component {} is", keyw(&dep.name.value))?;
         writeln!(decl, "port (")?;
-        let port_vec: Vec<String> = dep.ports.iter().map(|x| keyw(&x.name.value)).collect();
+        let port_vec: Vec<String> = chip_hdl_some.ports.iter().map(|x| keyw(&x.name.value)).collect();
         writeln!(decl, "{}", port_vec.join(";\n"))?;
 
         match &self.optimization_info {
