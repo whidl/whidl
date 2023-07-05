@@ -2,7 +2,7 @@
 //! Modelsim testbenches.
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
-use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser};
+use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser, Part, Component, Identifier};
 use crate::scanner::Scanner;
 use crate::simulator::Chip;
 use crate::test_parser::{OutputFormat, TestScript};
@@ -57,7 +57,18 @@ impl TryFrom<&TestScript> for TestBench {
     type Error = Box<dyn Error>;
 
     fn try_from(test_script: &TestScript) -> Result<Self, Box<dyn Error>> {
-        let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+        let (mut hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+
+        // Add a part to the HDL for the chip being tested.
+        // Hack for now to trigger component declaration.
+        let value = &hdl.name.clone();
+        let p = Part::Component(Component {
+            name: Identifier::from(hdl.name.as_str()),
+            mappings: Vec::new(),
+            generic_params: Vec::new(),
+        });
+        hdl.parts.push(p);
+
         let cmp = crate::test_script::read_cmp(test_script)?;
         let mut cmp_i = cmp.iter();
 
@@ -144,7 +155,6 @@ impl TryFrom<&TestBench> for VhdlEntity {
 
         // Dependencies of the test script are the chip being
         // tested + dependencies of the chip being tested.
-        let chip_vhdl = VhdlEntity::try_from(&test_bench.chip)?;
         let chip = Chip::new(
             &test_bench.chip,
             ptr::null_mut(),
