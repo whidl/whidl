@@ -318,6 +318,18 @@ impl VhdlEntity {
         writeln!(decl, "component {} is", keyw(&dep.name.value))?;
         writeln!(decl, "port (")?;
 
+        match &self.optimization_info {
+            Some(info) => match RefCell::borrow(info).deref() {
+                OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
+                    if seq_flag_map.get(&dep.name.value) == Some(&true) {
+                        writeln!(decl, "clk : in std_logic_vector(0 downto 0);")?;
+                    }
+                }
+                _ => (),
+            },
+            None => (),
+        }
+
         let vhdl_ports: Vec<String> = chip_hdl
             .ports
             .iter()
@@ -325,17 +337,6 @@ impl VhdlEntity {
             .collect();
         writeln!(decl, "{}", vhdl_ports.join(";\n"))?;
 
-        match &self.optimization_info {
-            Some(info) => match RefCell::borrow(info).deref() {
-                OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
-                    if seq_flag_map.get(&dep.name.value) == Some(&true) {
-                        writeln!(decl, "clk : in std_logic;")?;
-                    }
-                }
-                _ => (),
-            },
-            None => (),
-        }
 
         writeln!(decl, ");")?;
         writeln!(decl, "end component {};", keyw(&dep.name.value))?;
@@ -922,7 +923,7 @@ begin
 out_n2v <= a nand b;
 end architecture arch;
 "#;
-    let mut file = File::create(qp.project_dir.join("NAND.vhdl"))?;
+    let mut file = File::create(qp.project_dir.join("Nand.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
 
     let dff_vhdl = r#"
