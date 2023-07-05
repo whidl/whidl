@@ -2,7 +2,10 @@
 //! Modelsim testbenches.
 
 use crate::error::{ErrorKind, N2VError, TransformedError};
-use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser, Part, Component, Identifier};
+use crate::expr::{GenericWidth, Terminal};
+use crate::opt::optimization::{OptimizationPass, OptimizationInfo};
+use crate::opt::sequential::SequentialPass;
+use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser, Part, Component, Identifier, PortDirection};
 use crate::scanner::Scanner;
 use crate::simulator::Chip;
 use crate::test_parser::{OutputFormat, TestScript};
@@ -12,6 +15,7 @@ use crate::vhdl::SignalRhs::*;
 use crate::vhdl::*;
 use crate::ChipHDL;
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
@@ -48,7 +52,11 @@ impl From<&OutputFormat> for Signal {
 
 impl From<&Vec<OutputFormat>> for TestbenchSignals {
     fn from(output_list: &Vec<OutputFormat>) -> Self {
-        let value = output_list.iter().map(Signal::from).collect();
+        let mut value: Vec<Signal>  = output_list.iter().map(Signal::from).collect();
+        value.push(Signal {
+            name: "clk".to_string(),
+            width: GenericWidth::Terminal(Terminal::Num(1)),
+        });
         TestbenchSignals { value }
     }
 }
@@ -197,13 +205,45 @@ impl TryFrom<&TestBench> for VhdlEntity {
             statements: process_statements,
         }));
 
+
+        // Create a clock port if this is a sequential chip.
+        let mut sequential_pass = SequentialPass::new();
+        let (_, sequential_pass_info_raw) = sequential_pass.apply(&chip.hdl.as_ref().unwrap(), &chip.hdl_provider)?;
+        let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
+
+        if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+            &*sequential_pass_info.borrow()
+        {
+            if sequential_flag_map.get(&keyw(&test_bench.chip.name)) == Some(&true) {
+                let clock_port_mapping = PortMappingVHDL {
+                    wire_name: "clk".to_string(),
+                    port: SliceVHDL {
+                        name: "clk".to_string(),
+                        start: None,
+                        end: None,
+                    },
+                    wire: SignalRhs::Slice(SliceVHDL {
+                        name: "clk".to_string(),
+                        start: None,
+                        end: None,
+                    }),
+                };
+
+                for part in &mut statements {
+                    if let Statement::Component(c) = part {
+                        c.port_mappings.push(clock_port_mapping.clone());
+                    }
+                }
+            }
+        }
+
         Ok(VhdlEntity {
             name,
             generics,
             ports,
             statements,
             signals,
-            optimization_info: None,
+            optimization_info: Some(Rc::clone(&sequential_pass_info)),
             chip,
         })
     }
