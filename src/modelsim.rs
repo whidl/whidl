@@ -16,7 +16,6 @@ use crate::vhdl::*;
 use crate::ChipHDL;
 
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
@@ -108,8 +107,32 @@ impl TryFrom<&TestScript> for TestBench {
                             right: SignalRhs::Literal(LiteralVHDL { values: fixme }),
                         }));
                     }
-                    crate::test_parser::Instruction::Tick => {}
-                    crate::test_parser::Instruction::Tock => {}
+                    crate::test_parser::Instruction::Tick => {
+                        instructions.push(crate::vhdl::Statement::Assignment(
+                            AssignmentVHDL {
+                                left: SliceVHDL {
+                                    name: "clk".to_string(),
+                                    start: None,
+                                    end: None,
+                                },
+                                right: SignalRhs::Literal(LiteralVHDL { values: vec![false] }),
+                            },
+                        ));
+                        instructions.push(crate::vhdl::Statement::Wait(WaitVHDL {}));
+                    }
+                    crate::test_parser::Instruction::Tock => {
+                        instructions.push(crate::vhdl::Statement::Assignment(
+                            AssignmentVHDL {
+                                left: SliceVHDL {
+                                    name: "clk".to_string(),
+                                    start: None,
+                                    end: None,
+                                },
+                                right: SignalRhs::Literal(LiteralVHDL { values: vec![true] }),
+                            },
+                        ));
+                        instructions.push(crate::vhdl::Statement::Wait(WaitVHDL {}));
+                    }
                     crate::test_parser::Instruction::Output => {
                         let next_cmp = cmp_i.next().unwrap();
                         for b in next_cmp.keys() {

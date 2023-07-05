@@ -180,7 +180,7 @@ impl fmt::Display for IdStatement {
             Statement::Process(x) => write!(f, "cn2v{}: {}", self.id, x),
             Statement::Assignment(x) => write!(f, "{}", x),
             Statement::Assert(x) => write!(f, "cn2v{}: {}", self.id, x),
-            Statement::Wait(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Wait(_) => write!(f, "wait for 10 ns;"),
         }
     }
 }
