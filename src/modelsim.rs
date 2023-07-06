@@ -348,7 +348,10 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     Ok(())
 }
 
-#[cfg(test)]
+// Only run these tests if the modelsim_tests feature is enabled.
+// We need to disable these tests sometimes (GitHub actions) because 
+// they depend on Quartus Prime, which is huge. 
+#[cfg(all(test, feature = "modelsim_tests"))]
 mod test {
     use super::*;
     use std::path::PathBuf;

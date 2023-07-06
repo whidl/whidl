@@ -7,7 +7,9 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["console_error_panic_hook", "modelsim_tests"]
+modelsim_tests = []
+
 
 [dependencies]
 clap = { version = "4.1.8", features = ["derive"] }

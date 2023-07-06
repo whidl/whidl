@@ -15,4 +15,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Test
-      run: cargo test --release --verbose
+      run: cargo test --release --no-default-features --features "console_error_panic_hook"
