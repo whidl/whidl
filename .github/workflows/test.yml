@@ -12,6 +12,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-22.04
+    container:
+      image: defreez/whidl-dev
     steps:
     - uses: actions/checkout@v3
     - name: Test
