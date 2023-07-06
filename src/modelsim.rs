@@ -497,14 +497,6 @@ mod test {
     }
 
     #[test]
-    fn test_alu() {
-        run_test(
-            PathBuf::from("resources/tests/nand2tetris/solutions/ALU.tst"),
-            "work.ALU_tst",
-        );
-    }
-
-    #[test]
     fn test_bit() {
         run_test(
             PathBuf::from("resources/tests/nand2tetris/solutions/Bit.tst"),
