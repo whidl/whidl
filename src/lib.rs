@@ -54,16 +54,14 @@ impl HdlProvider for EmbedReader {
 pub fn simulate(s: &str, inputs: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
     let mut scanner = Scanner::new(s, PathBuf::from(""));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let provider: Rc<dyn HdlProvider> = Rc::new(EmbedReader);
+    let mut parser = Parser::new(&mut scanner, provider.clone());
 
     let hdl = match parser.parse() {
         Ok(x) => x,
         Err(e) => return Err(JsValue::from(e.to_string())),
     };
 
-    let provider: Rc<dyn HdlProvider> = Rc::new(EmbedReader);
     let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new()) {
         Ok(x) => x,
         Err(e) => return Err(JsValue::from(e.to_string())),
@@ -97,9 +95,7 @@ pub fn full_table_internal(
     provider: Rc<dyn HdlProvider>,
 ) -> Result<(Vec<String>, Table), Box<dyn Error>> {
     let mut scanner = Scanner::new(s, PathBuf::from(""));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let mut parser = Parser::new(&mut scanner, provider.clone());
 
     let hdl = match parser.parse() {
         Ok(x) => x,
@@ -189,9 +185,8 @@ pub fn full_table_internal(
 pub fn component_graphs(s: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
     let mut scanner = Scanner::new(s, PathBuf::from(""));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let provider: Rc<dyn HdlProvider> = Rc::new(EmbedReader);
+    let mut parser = Parser::new(&mut scanner, provider.clone());
 
     let hdl = match parser.parse() {
         Ok(x) => x,
@@ -200,7 +195,6 @@ pub fn component_graphs(s: &str) -> Result<String, JsValue> {
         }
     };
 
-    let provider: Rc<dyn HdlProvider> = Rc::new(EmbedReader);
     let chip = match Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new()) {
         Ok(x) => x,
         Err(e) => {
@@ -222,19 +216,15 @@ mod libtest {
     #[test]
     fn test_nand2tetris_solution_and() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
+        let base_path = manifest_dir
                 .join("resources")
                 .join("tests")
                 .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+                .join("solutions");
         let provider = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("And.hdl").unwrap();
         let (_, table) =
-            full_table_internal(&contents, Rc::new(FileReader::new(&base_path))).unwrap();
+            full_table_internal(&contents, provider).unwrap();
         assert_eq!(table.len(), 4);
     }
 }

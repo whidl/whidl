@@ -1,28 +1,710 @@
 // This module is responsible for taking a parsed Chip as input and
 // producing equivalent VHDL code.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::fmt;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
-use std::path::Path;
+use std::ops::Deref;
+use std::path::PathBuf;
+use std::ptr;
 use std::rc::Rc;
 
-use crate::error::N2VError;
 use crate::expr::{eval_expr, GenericWidth, Op, Terminal};
+use crate::opt::optimization::OptimizationInfo::{self};
+use crate::opt::optimization::OptimizationPass;
+use crate::opt::portmap_dedupe::PortMapDedupe;
+use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
-use crate::simulator::{infer_widths, gather_assignments};
+use crate::simulator::Chip;
+use crate::simulator::{infer_widths, Port};
+use crate::Scanner;
 
-pub fn create_quartus_project(
-    chip: &ChipHDL,
-    chips_vhdl: HashMap<String, String>,
-    project_dir: &Path,
-) -> std::io::Result<()> {
-    // check to see if the directory exists. panic if it exists/
-    fs::create_dir(project_dir)?;
-    let mut tcl = format!("project_new {} -overwrite", chip.name);
+// ========= STRUCTS ========== //
+pub struct VhdlEntity {
+    pub name: String,               // The name of this chip.
+    pub generics: Vec<String>,      // Declared generics.
+    pub ports: Vec<VhdlPort>,       // Declared ports.
+    pub signals: Vec<Signal>,       // Declared signals.
+    pub statements: Vec<Statement>, // VHDL statements.
+    pub optimization_info: Option<Rc<RefCell<OptimizationInfo>>>,
+    pub chip: Chip,
+}
+impl Hash for VhdlEntity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+impl PartialEq for VhdlEntity {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for VhdlEntity {}
+
+pub struct IdStatement {
+    pub id: usize,
+    pub stmt: Statement,
+}
+
+#[derive(Clone)]
+//#[allow(clippy::large_enum_variant)]
+pub enum Statement {
+    Component(VhdlComponent),
+    Process(Process),
+    Assignment(AssignmentVHDL),
+    Assert(AssertVHDL),
+    Wait(WaitVHDL),
+}
+
+#[derive(Clone)]
+pub struct AssertVHDL {
+    pub signal_name: String,
+    pub signal_value: LiteralVHDL,
+    pub report_msg: String,
+}
+
+#[derive(Clone)]
+pub struct WaitVHDL {}
+
+#[derive(Clone)]
+pub enum SignalRhs {
+    Slice(SliceVHDL),
+    Literal(LiteralVHDL),
+}
+
+#[derive(Clone)]
+/// Designates two wire names. The signal from the right wire will be assigned to the left.
+pub struct AssignmentVHDL {
+    pub left: SliceVHDL,
+    pub right: SignalRhs,
+}
+
+#[derive(Clone)]
+pub struct LiteralVHDL {
+    pub values: Vec<bool>,
+}
+
+#[derive(Clone)]
+pub struct Process {
+    pub statements: Vec<Statement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Signal {
+    pub name: String,
+    pub width: GenericWidth,
+}
+
+/// Abstract VHDL component.
+/// unit generic map (...) port map (...)
+#[derive(Clone)]
+pub struct VhdlComponent {
+    pub unit: String,
+    pub generic_params: Vec<GenericWidth>,
+    pub port_mappings: Vec<PortMappingVHDL>,
+}
+
+/// VHDL example: foo(3 downto 0) or bar(X downto 0)
+#[derive(Clone)]
+pub struct SliceVHDL {
+    /// The name of the signal. This is foo or bar in the example above.
+    pub name: String,
+
+    /// The start of the slice (inclusive). This will be None for signals without indices.
+    pub start: Option<GenericWidth>,
+
+    /// The end of the slice (exclusive). This will be None for signals without indices.
+    pub end: Option<GenericWidth>,
+}
+
+#[derive(Clone)]
+pub struct PortMappingVHDL {
+    pub wire_name: String,
+    pub port: SliceVHDL,
+    pub wire: SignalRhs,
+}
+
+pub struct QuartusProject {
+    pub chip_hdl: ChipHDL,
+    pub chip_vhdl: VhdlEntity,
+    pub project_dir: PathBuf,
+}
+
+pub struct VhdlPort {
+    pub name: String,
+    pub width: GenericWidth,
+    pub direction: PortDirection,
+}
+
+// ========= TRAITS ========== //
+
+/// A Pet is an object that we track by name.
+pub trait Pet<'a> {
+    fn name(&self) -> &'a str;
+}
+
+/// A container for pets.
+pub trait Cage<'a> {
+    fn contains_name(self, name: &str) -> bool
+    where
+        Self: IntoIterator + std::marker::Sized,
+        <Self as IntoIterator>::Item: Pet<'a>,
+    {
+        self.into_iter().any(|pet| pet.name() == name)
+    }
+}
+
+impl<'a> Pet<'a> for &'a VhdlPort {
+    fn name(&self) -> &'a str {
+        &self.name
+    }
+}
+
+impl<'a> Cage<'a> for &Vec<VhdlPort> {}
+
+// ========= DISPLAY ========== //
+//
+// The fmt::Display trait is used to convert VHDL abstract syntax nodes
+// to VHDL concrete syntax.
+
+impl fmt::Display for IdStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.stmt {
+            Statement::Component(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Process(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Assignment(x) => write!(f, "{}", x),
+            Statement::Assert(x) => write!(f, "cn2v{}: {}", self.id, x),
+            Statement::Wait(_) => write!(f, "wait for 10 ns;"),
+        }
+    }
+}
+
+impl fmt::Display for AssertVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "assert {} = {} report \"{}\";",
+            keyw(&self.signal_name),
+            self.signal_value,
+            self.report_msg
+        )
+    }
+}
+
+impl fmt::Display for AssignmentVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} <= {};", self.left, self.right)
+    }
+}
+
+impl fmt::Display for WaitVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "wait for 10 ns;")
+    }
+}
+
+impl fmt::Display for LiteralVHDL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"")?;
+
+        for &x in self.values.iter().rev() {
+            if x {
+                write!(f, "1")?;
+            } else {
+                write!(f, "0")?;
+            }
+        }
+
+        write!(f, "\"")
+    }
+}
+
+impl fmt::Display for SignalRhs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Slice(x) => write!(f, "{}", x),
+            Self::Literal(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl fmt::Display for VhdlEntity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "library ieee;")?;
+        writeln!(f, "use ieee.std_logic_1164.all;")?;
+        writeln!(f)?;
+
+        // Final VHDL generated for the top-level chip.
+        writeln!(f, "entity {} is", keyw(&self.name))?;
+
+        for x in &self.generics {
+            writeln!(f, "{}", x)?;
+        }
+
+        let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
+        if !port_vec.is_empty() {
+            writeln!(f, "port (")?;
+            writeln!(f, "{}", port_vec.join(";\n"))?;
+            writeln!(f, ");")?;
+        }
+
+        writeln!(f, "end entity {};", keyw(&self.name))?;
+        writeln!(f)?;
+
+        writeln!(f, "architecture arch of {} is", keyw(&self.name))?;
+
+        // We need to iterate over HDL parts in order to generate declarations for them.
+        let mut seen = HashSet::new();
+        for part in &self.chip.hdl.as_ref().unwrap().parts {
+            match part {
+                Part::Component(component) => {
+                    if seen.insert(&component.name.value) {
+                        // If it's a Component, we generate its declaration
+                        let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                        writeln!(f, "{}", decl)?;
+                    }
+                }
+                Part::Loop(loop_hdl) => {
+                    for component in &loop_hdl.body {
+                        if seen.insert(&component.name.value) {
+                            let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                            writeln!(f, "{}", decl)?;
+                        }
+                    }
+                }
+                Part::AssignmentHDL(_) => {
+                    // Do nothing for AssignmentHDL
+                }
+            }
+        }
+
+        for x in &self.signals {
+            writeln!(f, "signal {}", x)?;
+        }
+
+        writeln!(f, "begin")?;
+        for (i, x) in self.statements.iter().enumerate() {
+            let id_stmt = IdStatement {
+                id: i,
+                stmt: x.clone(),
+            };
+            writeln!(f, "{}", id_stmt)?;
+        }
+
+        writeln!(f, "end arch;")?;
+        write!(f, "")
+    }
+}
+
+// Declaration VHDL for an entity.
+impl VhdlEntity {
+    fn declaration(
+        &self,
+        dep: &Component,
+        provider: Rc<dyn HdlProvider>,
+    ) -> Result<String, std::fmt::Error> {
+        let mut decl = String::new();
+
+        // Just parse it again to get the chip_hdl.
+        // It's not ideal, but it's the easiest way to get the chip_hdl for now.
+        let chip_hdl = get_hdl(&dep.name.value, &provider).unwrap();
+
+        writeln!(decl, "component {} is", keyw(&dep.name.value))?;
+        writeln!(decl, "port (")?;
+
+        match &self.optimization_info {
+            Some(info) => match RefCell::borrow(info).deref() {
+                OptimizationInfo::SequentialFlagMap(seq_flag_map) => {
+                    if seq_flag_map.get(&dep.name.value) == Some(&true) {
+                        writeln!(decl, "clk : in std_logic_vector(0 downto 0);")?;
+                    }
+                }
+                _ => (),
+            },
+            None => (),
+        }
+
+        let vhdl_ports: Vec<String> = chip_hdl
+            .ports
+            .iter()
+            .map(|port| VhdlPort::from(port).to_string())
+            .collect();
+        writeln!(decl, "{}", vhdl_ports.join(";\n"))?;
+
+
+        writeln!(decl, ");")?;
+        writeln!(decl, "end component {};", keyw(&dep.name.value))?;
+
+        Ok(decl)
+    }
+}
+
+impl fmt::Display for Signal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} : ", keyw(&self.name))?;
+        match self.width {
+            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
+                write!(f, "std_logic_vector({} downto 0);", port_width_num - 1)
+            }
+            _ => {
+                let sub1 = GenericWidth::Expr(
+                    Op::Sub,
+                    Box::new(self.width.clone()),
+                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+                );
+                write!(
+                    f,
+                    "std_logic_vector({} downto 0);",
+                    eval_expr(&sub1, &HashMap::new())
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for VhdlComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} port map(", keyw(&self.unit))?;
+
+        // At this point the VHDL AST should be valid, so here
+        // we don't need to handle the case where the same output port
+        // is used for multiple signals.
+        for (i, mapping) in self.port_mappings.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", mapping)?;
+        }
+        writeln!(f, ");")
+    }
+}
+
+impl fmt::Display for Process {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "process begin")?;
+
+        for (i, x) in self.statements.iter().enumerate() {
+            let id_stmt = IdStatement {
+                id: i,
+                stmt: x.clone(),
+            };
+            writeln!(f, "{}", id_stmt)?;
+        }
+
+        writeln!(f, "end process;")
+    }
+}
+
+/// Synthesizes VHDL for BusVHDL.
+impl std::fmt::Display for SliceVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.name == "true" {
+            return write!(f, "(others => '1')");
+        } else if self.name == "false" {
+            return write!(f, "(others => '0')");
+        }
+
+        // Only write out downto syntax if this is an array.
+        if self.start.is_some() {
+            let start: &GenericWidth = self.start.as_ref().unwrap();
+            let end: &GenericWidth = self.end.as_ref().unwrap();
+            write!(f, "{}({} downto {})", keyw(&self.name), end, start)
+        } else {
+            write!(f, "{}", keyw(&self.name))
+        }
+    }
+}
+
+impl fmt::Display for VhdlPort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} : ", keyw(&self.name))?;
+
+        if self.direction == PortDirection::In {
+            write!(f, "in ")?;
+        } else {
+            write!(f, "out ")?;
+        }
+
+        match self.width {
+            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
+                write!(f, "std_logic_vector({} downto 0)", port_width_num - 1)?;
+            }
+            _ => {
+                let sub1 = GenericWidth::Expr(
+                    Op::Sub,
+                    Box::new(self.width.clone()),
+                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
+                );
+                write!(
+                    f,
+                    "std_logic_vector({} downto 0)",
+                    eval_expr(&sub1, &HashMap::new())
+                )?;
+            }
+        };
+
+        write!(f, "")
+    }
+}
+
+impl std::fmt::Display for PortMappingVHDL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} => {}", &self.port, &self.wire)
+    }
+}
+
+// ========= CONVERSIONS ========== //
+
+/// This is where VHDL is synthesized for an HDL chip.
+impl TryFrom<&ChipHDL> for VhdlEntity {
+    type Error = Box<dyn Error>;
+
+    fn try_from(raw_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
+        let mut dedupe_pass = PortMapDedupe::new();
+        let (chip_hdl, _) = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
+
+        let chip = Chip::new(
+            chip_hdl,
+            ptr::null_mut(),
+            &chip_hdl.provider,
+            true,
+            &Vec::new(),
+        )?;
+
+        let mut vhdl_components: Vec<VhdlComponent> =
+            chip.components.iter().map(VhdlComponent::from).collect();
+
+        let generics: Vec<String> = Vec::new();
+        let mut ports: Vec<VhdlPort> = Vec::new();
+
+        for port in &chip_hdl.ports {
+            ports.push(VhdlPort::from(port));
+        }
+
+        // Create a clock port if this is a sequential chip.
+        let mut sequential_pass = SequentialPass::new();
+        let (_, sequential_pass_info_raw) = sequential_pass.apply(chip_hdl, &chip_hdl.provider)?;
+        let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
+
+        if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+            &*sequential_pass_info.borrow()
+        {
+            if sequential_flag_map.get(&chip_hdl.name) == Some(&true) {
+                let clock_port = VhdlPort {
+                    name: "clk".to_string(),
+                    width: GenericWidth::Terminal(Terminal::Num(1)),
+                    direction: PortDirection::In,
+                };
+
+                ports.push(clock_port);
+            }
+        }
+
+        let inferred_widths = infer_widths(
+            chip_hdl,
+            &Vec::new(),
+            &chip.components,
+            &chip_hdl.provider,
+            &Vec::new(),
+        )?;
+
+        let ports_ref = &ports;
+
+        let signals = inferred_widths
+            .iter()
+            .filter(|(signal_name, _)| !ports_ref.contains_name(signal_name))
+            .map(|(signal_name, signal_width)| Signal {
+                name: signal_name.clone(),
+                width: signal_width.clone(),
+            })
+            .collect();
+
+        let mut statements = Vec::new();
+        for c in &mut vhdl_components {
+            // If this is a sequential chip, we need to add a clock port mapping.
+            if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+                &*sequential_pass_info.borrow()
+            {
+                if sequential_flag_map.get(&c.unit) == Some(&true) {
+                    let clock_port_mapping = PortMappingVHDL {
+                        wire_name: "clk".to_string(),
+                        port: SliceVHDL {
+                            name: "clk".to_string(),
+                            start: None,
+                            end: None,
+                        },
+                        wire: SignalRhs::Slice(SliceVHDL {
+                            name: "clk".to_string(),
+                            start: None,
+                            end: None,
+                        }),
+                    };
+
+                    c.port_mappings.push(clock_port_mapping);
+                }
+            }
+
+            statements.push(Statement::Component(c.clone()));
+        }
+
+        // Synthesize assignments. Assignments were added after components
+        // and are handled a little differently because they don't instantiate
+        // a chip.
+        for assignment in &chip_hdl.parts {
+            if let Part::AssignmentHDL(assignment) = assignment {
+                let assignment = AssignmentVHDL::from(assignment);
+                statements.push(Statement::Assignment(assignment));
+            }
+        }
+
+        Ok(VhdlEntity {
+            name: chip_hdl.name.clone(),
+            generics,
+            ports,
+            signals,
+            statements,
+            optimization_info: Some(Rc::clone(&sequential_pass_info)),
+            chip,
+        })
+    }
+}
+
+fn group_port_mappings(component: &Component) -> HashMap<String, Vec<&PortMappingHDL>> {
+    // port_mappings is a HashMap where each key is the port name, and each
+    // value is a vector of all the PortMappingHDL instances where that port
+    // is mapped.
+    let mut grouped_port_mappings: HashMap<String, Vec<&PortMappingHDL>> = HashMap::new();
+    for port_mapping in &component.mappings {
+        grouped_port_mappings
+            .entry(port_mapping.port.name.clone())
+            .or_default()
+            .push(port_mapping);
+    }
+    grouped_port_mappings
+}
+
+/// Transforms a `&Component` into a `VhdlComponent.
+///
+/// In HDL, multiple signals can be mapped to a single output port, which is not
+/// supported in VHDL. This function creates an intermediate signals when
+/// necessary.
+///
+/// # Parameters
+///
+/// - `component`: The `Component` instance to transform.
+///
+/// # Returns
+///
+/// A `VhdlComponent` instance that represents the transformed component.
+impl From<&Component> for VhdlComponent {
+    fn from(component: &Component) -> Self {
+        let port_mappings = group_port_mappings(component);
+        let mut vhdl_port_mappings = Vec::new();
+        for (port_name, mappings) in port_mappings {
+            if mappings.len() == 1 {
+                // If there's only one mapping, no intermediate signal is necessary
+                vhdl_port_mappings.push(PortMappingVHDL::from(mappings[0]));
+            } else {
+                // If there's more than one mapping, create an intermediate signal for each
+                for (i, mapping) in mappings.iter().enumerate() {
+                    let intermediate_signal_name = format!("{}_{}", port_name, i);
+                    let wire = SliceVHDL {
+                        name: intermediate_signal_name.clone(),
+                        start: mapping.wire.start.clone(),
+                        end: mapping.wire.end.clone(),
+                    };
+
+                    vhdl_port_mappings.push(PortMappingVHDL {
+                        wire_name: intermediate_signal_name,
+                        port: SliceVHDL::from(&mapping.port),
+                        wire: SignalRhs::Slice(wire),
+                    });
+                }
+            }
+        }
+
+        VhdlComponent {
+            unit: component.name.value.clone(),
+            generic_params: component.generic_params.clone(),
+            port_mappings: vhdl_port_mappings,
+        }
+    }
+}
+
+impl From<&BusHDL> for SliceVHDL {
+    fn from(hdl: &BusHDL) -> Self {
+        SliceVHDL {
+            name: hdl.name.clone(),
+            start: hdl.start.clone(),
+            end: hdl.end.clone(),
+        }
+    }
+}
+
+impl From<&SignalRhs> for BusHDL {
+    fn from(vhdl: &SignalRhs) -> Self {
+        match vhdl {
+            SignalRhs::Slice(slice) => BusHDL {
+                name: slice.name.clone(),
+                start: slice.start.clone(),
+                end: slice.end.clone(),
+            },
+            SignalRhs::Literal(_l) => {
+                panic!("Not yet implemented.");
+            }
+        }
+    }
+}
+
+impl From<&GenericPort> for VhdlPort {
+    fn from(port: &GenericPort) -> Self {
+        VhdlPort {
+            name: port.name.value.clone(),
+            width: port.width.clone(),
+            direction: port.direction,
+        }
+    }
+}
+
+impl From<&PortMappingHDL> for PortMappingVHDL {
+    fn from(pm: &PortMappingHDL) -> Self {
+        let wire = SignalRhs::Slice(SliceVHDL::from(&pm.wire));
+
+        PortMappingVHDL {
+            wire_name: pm.wire.name.clone(),
+            port: SliceVHDL::from(&pm.port),
+            wire,
+        }
+    }
+}
+
+impl From<&AssignmentHDL> for AssignmentVHDL {
+    fn from(assignment: &AssignmentHDL) -> Self {
+        AssignmentVHDL {
+            left: SliceVHDL::from(&assignment.left),
+            right: SignalRhs::Slice(SliceVHDL::from(&assignment.right)),
+        }
+    }
+}
+
+impl QuartusProject {
+    pub fn new(chip_hdl: ChipHDL, chip_vhdl: VhdlEntity, project_dir: PathBuf) -> Self {
+        QuartusProject {
+            chip_hdl,
+            chip_vhdl,
+            project_dir,
+        }
+    }
+}
+
+pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> {
+    let mut tcl = format!("project_new {} -overwrite", &qp.chip_vhdl.name);
 
     tcl.push_str(&String::from(
         r#"
@@ -30,7 +712,7 @@ pub fn create_quartus_project(
         set_global_assignment -name FAMILY "Cyclone V"
         set_global_assignment -name DEVICE 5CSEMA5F31C6
         #============================================================
-        # LEDR 
+        # LEDR
         #============================================================
         set_location_assignment PIN_V16 -to LEDR[0]
         set_location_assignment PIN_W16 -to LEDR[1]
@@ -202,31 +884,38 @@ pub fn create_quartus_project(
     writeln!(
         tcl,
         "set_global_assignment -name TOP_LEVEL_ENTITY {}",
-        keyw(&chip.name)
-    )
-    .unwrap();
+        keyw(&qp.chip_vhdl.name)
+    )?;
 
-    // write out each vhdl file
-    for (chip_name, chip_vhdl) in &chips_vhdl {
-        let chip_filename = chip_name.clone() + ".vhdl";
-        let mut file = File::create(project_dir.join(&chip_filename))?;
-        file.write_all(chip_vhdl.as_bytes())?;
-        writeln!(
-            tcl,
-            "set_global_assignment -name VHDL_FILE {}",
-            chip_filename
-        )
-        .unwrap();
+    writeln!(tcl, "set_global_assignment -name VHDL_FILE NAND.vhdl");
+    let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
+    writeln!(
+        tcl,
+        "set_global_assignment -name VHDL_FILE {}",
+        chip_filename
+    )?;
+
+    // Run the sequential pass on chip HDL
+    let mut sequential_pass = SequentialPass::new();
+    let (_, sequential_pass_info_raw) =
+        sequential_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
+    let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
+
+    if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
+        &*sequential_pass_info.borrow()
+    {
+        for name in sequential_flag_map.keys() {
+            writeln!(tcl, "set_global_assignment -name VHDL_FILE {}.vhdl", name)?;
+        }
     }
 
     let nand_vhdl = r#"
 library ieee;
 use ieee.std_logic_1164.all;
 entity nand_n2v is
-port (a : in std_logic;
-b : in std_logic;
-out_n2v : out std_logic;
-CLOCK_50 : in std_logic
+port (a : in std_logic_vector(0 downto 0);
+b : in std_logic_vector(0 downto 0);
+out_n2v : out std_logic_vector(0 downto 0)
 );
 end entity nand_n2v;
 architecture arch of nand_n2v is
@@ -234,7 +923,7 @@ begin
 out_n2v <= a nand b;
 end architecture arch;
 "#;
-    let mut file = File::create(project_dir.join("nand.vhdl"))?;
+    let mut file = File::create(qp.project_dir.join("Nand.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
 
     let dff_vhdl = r#"
@@ -244,12 +933,13 @@ LIBRARY altera;
 USE altera.altera_primitives_components.all;
 
 entity DFF_n2v is
-port (in_n2v : in std_logic;
-CLOCK_50 : in std_logic;
-out_n2v : out std_logic);
+port (in_n2v : in std_logic_vector(0 downto 0);
+out_n2v : out std_logic_vector(0 downto 0);
+clk : in std_logic_vector(0 downto 0)
+);
 end entity DFF_n2v;
 
-architecture arch of DFF_n2v is 
+architecture arch of DFF_n2v is
 
 COMPONENT DFF
    PORT (d   : IN STD_LOGIC;
@@ -261,173 +951,84 @@ COMPONENT DFF
 END COMPONENT;
 
 begin
-x0: DFF port map (d => in_n2v, clk => CLOCK_50, clrn => '1', prn => '1', q => out_n2v);
+x0: DFF port map (d => in_n2v(0), clrn => '1', prn => '1', q => out_n2v(0), clk => clk(0));
 end architecture arch;
 "#;
-    let mut file = File::create(project_dir.join("dff.vhdl"))?;
+
+    let mut file = File::create(qp.project_dir.join("DFF.vhdl"))?;
     file.write_all(dff_vhdl.as_bytes())?;
 
-    tcl.push_str("set_global_assignment -name VHDL_FILE nand.vhdl\n");
-    tcl.push_str("set_global_assignment -name VHDL_FILE dff.vhdl\n");
     tcl.push_str("project_close");
-    let mut file = File::create(project_dir.join("project.tcl"))?;
+    let mut file = File::create(qp.project_dir.join("project.tcl"))?;
     file.write_all(tcl.as_bytes())?;
+
+    // Write the already-parsed main chip.
+    let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
+    let mut file = File::create(qp.project_dir.join(&chip_filename))?;
+    file.write_all(format!("{}", qp.chip_vhdl).as_bytes())?;
+
+    // The chip names we have already processed. We only need to
+    // convert each chip type once.
+    let mut done: HashSet<String> = HashSet::new();
+    done.insert(String::from("Nand"));
+    done.insert(String::from("DFF"));
+
+    // Recursively parse and write all dependency components.
+    // Worklist is set of chip names that we need to convert from HDL to VHDL.
+    let mut worklist: Vec<String> = Vec::new();
+
+    // Pushes parts onto the worklist.
+    fn push_parts(parts: &Vec<Part>, worklist: &mut Vec<String>, done: &mut HashSet<String>) {
+        for part in parts {
+            match part {
+                Part::Component(c) => {
+                    if !done.contains(&c.name.value) {
+                        done.insert(c.name.value.clone());
+                        worklist.push(c.name.value.clone());
+                    }
+                }
+                Part::Loop(l) => {
+                    for c in &l.body {
+                        if !done.contains(&c.name.value) {
+                            done.insert(c.name.value.clone());
+                            worklist.push(c.name.value.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Seed the worklist with all components of the top-level entity.
+    push_parts(&qp.chip_hdl.parts, &mut worklist, &mut done);
+
+    let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
+
+    while !worklist.is_empty() {
+        let next_chip_name = worklist.pop().unwrap();
+        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
+
+        let next_source_code = fs::read_to_string(&next_hdl_path)?;
+        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
+        let mut next_parser = Parser::new(&mut next_scanner, qp.chip_hdl.provider.clone());
+        let next_hdl = next_parser.parse()?;
+
+        // Convert HDL to VHDL (VHDl synthesis).
+        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
+
+        let next_filename = next_chip_name + ".vhdl";
+        let mut next_file = File::create(qp.project_dir.join(&next_filename))?;
+        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
+
+        push_parts(&next_hdl.parts, &mut worklist, &mut done);
+    }
 
     Ok(())
 }
 
-fn generics(chip: &ChipHDL) -> String {
-    let mut vhdl = String::new();
-
-    let mut generics = Vec::new();
-    for g in &chip.generic_decls {
-        let mut generic_vhdl = String::new();
-        write!(&mut generic_vhdl, "{} : positive", keyw(&g.value)).unwrap();
-        generics.push(generic_vhdl);
-    }
-
-    if !generics.is_empty() {
-        writeln!(&mut vhdl, "generic ({});", generics.join(";\n")).unwrap();
-    }
-
-    vhdl
-}
-
-fn ports(chip: &ChipHDL) -> String {
-    let mut vhdl = String::new();
-
-    let mut ports = Vec::new();
-    for port in &chip.ports {
-        let mut port_vhdl = String::new();
-        write!(&mut port_vhdl, "{} : ", keyw(&port.name.value)).unwrap();
-        if port.direction == PortDirection::In {
-            write!(&mut port_vhdl, "in ").unwrap();
-        } else {
-            write!(&mut port_vhdl, "out ").unwrap();
-        }
-
-        match &port.width {
-            GenericWidth::Terminal(Terminal::Num(port_width_num)) => {
-                if port_width_num > &1 {
-                    write!(
-                        &mut port_vhdl,
-                        "std_logic_vector({} downto 0)",
-                        port_width_num - 1
-                    )
-                    .unwrap();
-                } else {
-                    write!(&mut port_vhdl, "std_logic").unwrap();
-                }
-            }
-            _ => {
-                let sub1 = GenericWidth::Expr(
-                    Op::Sub,
-                    Box::new(port.width.clone()),
-                    Box::new(GenericWidth::Terminal(Terminal::Num(1))),
-                );
-                write!(
-                    &mut port_vhdl,
-                    "std_logic_vector({} downto 0)",
-                    eval_expr(&sub1, &HashMap::new())
-                )
-                .unwrap();
-            }
-        };
-
-        ports.push(port_vhdl);
-    }
-
-    writeln!(
-        &mut vhdl,
-        "port (CLOCK_50 : in std_logic; {});",
-        ports.join(";\n")
-    )
-    .unwrap();
-
-    vhdl
-}
-
-fn port_mapping(
-    hdl: &ChipHDL,
-    mapping: &PortMapping,
-    inferred_widths: &HashMap<String, GenericWidth>,
-) -> Result<(String, String, String, String), Box<dyn Error>> {
-    let port_width = &hdl.get_port(&mapping.port.name)?.width;
-    let vhdl_port_name = keyw(&mapping.port.name);
-
-    let port_range = match &mapping.port.start {
-        None => {
-            if &GenericWidth::Terminal(Terminal::Num(1)) != port_width {
-                if &mapping.wire.name != "false" && &mapping.wire.name != "true" {
-                    let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                    if &GenericWidth::Terminal(Terminal::Num(1)) == wire_width {
-                        // This happens when port width is 1 due to generic var.
-                        // and signal is width 1 and therefore std_logic.
-                        // The widths match up, but one is std_logic_vector and one is std_logic.
-                        String::from("(0)")
-                    } else {
-                        String::from("")
-                    }
-                } else {
-                    String::from("")
-                }
-            } else {
-                String::from("")
-            }
-        }
-        Some(_) => {
-            if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
-                format!("({})", mapping.wire.start.as_ref().unwrap())
-            } else {
-                format!(
-                    "({} downto {})",
-                    &mapping.port.end.as_ref().unwrap(),
-                    &mapping.port.start.as_ref().unwrap()
-                )
-            }
-        }
-    };
-
-    let wire_range = match &mapping.wire.start {
-        None => String::from(""),
-        Some(_) => {
-            let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
-                String::from("")
-            } else if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
-                format!("({})", mapping.wire.start.as_ref().unwrap())
-            } else {
-                format!(
-                    "({} downto {})",
-                    &mapping.wire.end.as_ref().unwrap(),
-                    &mapping.wire.start.as_ref().unwrap()
-                )
-            }
-        }
-    };
-    let wire_name: String = if let "false" = mapping.wire.name.to_lowercase().as_str() {
-        if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
-            String::from("'0'")
-        } else {
-            // we may not know what the width of the port is
-            String::from("(others => '0')")
-        }
-    } else if let "true" = mapping.wire.name.to_lowercase().as_str() {
-        if let GenericWidth::Terminal(Terminal::Num(1)) = port_width {
-            String::from("'1'")
-        } else {
-            // we may not know what the width of the port is
-            String::from("(others => '1')")
-        }
-    } else {
-        keyw(&mapping.wire.name)
-    };
-
-    Ok((vhdl_port_name, port_range, wire_name, wire_range))
-}
-
 // VHDL keywords that we can't use.
-fn keyw(name: &str) -> String {
+pub fn keyw(name: &str) -> String {
     match name.to_lowercase().as_str() {
         "in" => String::from("in_n2v"),
         "out" => String::from("out_n2v"),
@@ -440,494 +1041,5 @@ fn keyw(name: &str) -> String {
         "dff" => String::from("DFF_n2v"),
         "register" => String::from("register_n2v"),
         _ => String::from(name),
-    }
-}
-
-/// Synthesizes VHDL for a top-level chip and all of its components.
-///
-/// `hdl` - HDL for the chip to converit to VHDL.
-/// `provider` - Responsible for fetching HDL files
-/// `generic_params` - Instantiate the top-level chip with this parameter list.
-pub fn synth_vhdl(
-    hdl: &ChipHDL,
-    provider: &Rc<dyn HdlProvider>,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    // We don't want to make a chip for simulation, because we might have
-    // top-level generics. We aren't simulating the chip, we are translating
-    // the HDL to VHDL.
-
-    // Component name -> component definition
-    let mut entities = HashMap::new();
-
-    // Final VHDL generated for the top-level chip.
-    let mut top_level_vhdl = String::new();
-
-    write_top_level_entity(hdl, &mut top_level_vhdl);
-
-    writeln!(
-        &mut top_level_vhdl,
-        "architecture arch of {} is",
-        keyw(&hdl.name)
-    )?;
-
-    writeln!(&mut top_level_vhdl)?;
-
-    // Declare components
-    let mut component_decls: HashSet<String> = HashSet::new();
-
-    for part in &hdl.parts {
-        match part {
-            Part::Component(c) => {
-                // Generate the VHDL definitions for each type of component.
-                let generated_definitions = generate_component_definition(c, provider)?;
-                entities.extend(generated_definitions);
-
-                // Generate component declarations for components used by this chip.
-                // Only output one declaration even if the component is used multiple times.
-                let generated_declaration = generate_component_declaration(c, provider);
-                if !component_decls.contains(&generated_declaration) {
-                    write!(&mut top_level_vhdl, "{}", &generated_declaration).unwrap();
-                    component_decls.insert(generated_declaration);
-                }
-            }
-            Part::Loop(lp) => {
-                for c in &lp.body {
-                    let generated_definitions = generate_component_definition(c, provider)?;
-                    entities.extend(generated_definitions);
-
-                    // Generate component declarations for components used by this chip.
-                    // Only output one declaration even if the component is used multiple times.
-                    let generated_declaration = generate_component_declaration(c, provider);
-                    if !component_decls.contains(&generated_declaration) {
-                        write!(&mut top_level_vhdl, "{}", &generated_declaration)?;
-                        component_decls.insert(generated_declaration);
-                    }
-                }
-            }
-            Part::AssignmentHDL(_a) => {}
-        }
-    }
-
-    let mut signal_vhdl: String = String::new();
-    let mut arch_vhdl: String = String::new();
-
-    let components = generate_components(hdl)?;
-
-    // NOTE: Modify this later to consider assignments
-    let assignments = gather_assignments(&hdl.parts);
-    let inferred_widths = infer_widths(hdl, &assignments, &components, provider, &Vec::new())?;
-    let port_names: HashSet<String> = hdl.ports.iter().map(|x| keyw(&x.name.value)).collect();
-
-    let print_signal = |wire_name: &String, wire_width: &GenericWidth| -> String {
-        let mut new_signal: String = String::new();
-        if !port_names.contains(&keyw(wire_name)) {
-            write!(&mut new_signal, "signal {} ", keyw(wire_name)).unwrap();
-            if let GenericWidth::Terminal(Terminal::Num(1)) = wire_width {
-                write!(&mut new_signal, ": std_logic;").unwrap();
-            } else {
-                write!(
-                    &mut new_signal,
-                    ": std_logic_vector({} downto 0);",
-                    wire_width - &GenericWidth::Terminal(Terminal::Num(1))
-                )
-                .unwrap();
-            }
-        }
-
-        new_signal
-    };
-
-    let mut signals: HashSet<String> = HashSet::new();
-
-    for (component_counter, part) in hdl.parts.iter().enumerate() {
-        match part {
-            Part::Component(c) => {
-                let component_hdl = get_hdl(&c.name.value, provider)?;
-                let component_id = format!("nand2v_c{}", component_counter);
-
-                // Parameters assigned to generic variables.
-                let component_variables: HashMap<String, GenericWidth> = component_hdl
-                    .generic_decls
-                    .iter()
-                    .map(|x| x.value.clone())
-                    .zip(c.generic_params.clone())
-                    .collect();
-                let vhdl_generic_params: Vec<String> = component_variables
-                    .iter()
-                    .map(|(var, val)| format!("{} => {}", var, val))
-                    .collect();
-                let mut generic_map = String::new();
-                if !component_variables.is_empty() {
-                    write!(
-                        &mut generic_map,
-                        "generic map({})\n\t",
-                        vhdl_generic_params.join(",")
-                    )?;
-                }
-
-                let mut port_map: Vec<String> = Vec::new();
-
-                let mut redirected_ports: HashSet<String> = HashSet::new();
-                for mapping in c.mappings.iter() {
-                    // Print the declaration for the signal required for this mapping.
-                    if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
-                        // Get the width of the current wire in the mapping
-                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        // evaluate the wire width along with any generic variables if its needed
-                        let sig = print_signal(
-                            &mapping.wire.name,
-                            &eval_expr(wire_width, &component_variables),
-                        );
-
-                        // insert the evaluated signal into the signals for this component 
-                        signals.insert(sig);
-                    }
-
-                    // Get the direction for the port of the mapping
-                    let port_direction = &component_hdl.get_port(&mapping.port.name)?.direction;
-                    // Create port mappings from the port and wires
-                    let (vhdl_port_name, port_range, wire_name, wire_range) =
-                        port_mapping(&component_hdl, mapping, &inferred_widths)?;
-
-                    // add the mapping to the port map depending on its direction
-                    if port_direction == &PortDirection::In {
-                        port_map.push(format!(
-                            "{}{} => {}{}",
-                            vhdl_port_name, port_range, wire_name, wire_range
-                        ));
-                    } else {
-                        let redirect_signal = format!("{}_{}", component_id, vhdl_port_name);
-                        if redirected_ports.get(&vhdl_port_name).is_none() {
-                            redirected_ports.insert(vhdl_port_name.clone());
-                            port_map.push(format!(
-                                "{}{} => {}{}",
-                                vhdl_port_name, port_range, redirect_signal, wire_range
-                            ));
-                        }
-                        writeln!(
-                            &mut arch_vhdl,
-                            "{}{} <= {}{};",
-                            wire_name, wire_range, redirect_signal, wire_range
-                        )?;
-
-                        let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                        let sig = print_signal(
-                            &redirect_signal,
-                            &eval_expr(wire_width, &component_variables),
-                        );
-                        signals.insert(sig);
-                    }
-                }
-
-                writeln!(
-                    &mut arch_vhdl,
-                    "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
-                    component_id,
-                    keyw(&c.name.value),
-                    generic_map,
-                    port_map.join(", ")
-                )
-                .unwrap();
-            }
-
-            Part::Loop(lp) => {
-                let body: Vec<String> = lp
-                    .body
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| {
-                        let mut body_vhdl = String::new();
-                        let component_hdl = get_hdl(&c.name.value, provider).unwrap();
-                        let component_id = format!("n2vc{}_lp{}", component_counter, i);
-
-                        // Parameters assigned to generic variables.
-                        let component_variables: HashMap<String, GenericWidth> = component_hdl
-                            .generic_decls
-                            .iter()
-                            .map(|x| x.value.clone())
-                            .zip(c.generic_params.clone())
-                            .collect();
-                        let vhdl_generic_params: Vec<String> = component_variables
-                            .iter()
-                            .map(|(var, val)| format!("{} => {}", var, val))
-                            .collect();
-                        let mut generic_map = String::new();
-                        if !component_variables.is_empty() {
-                            write!(
-                                &mut generic_map,
-                                "generic map({})\n\t",
-                                vhdl_generic_params.join(",")
-                            )
-                            .unwrap();
-                        }
-
-                        let mut port_map: Vec<String> = Vec::new();
-
-                        let mut redirected_ports: HashSet<String> = HashSet::new();
-                        for mapping in c.mappings.iter() {
-                            // Print the declaration for the signal required for this mapping.
-                            if &mapping.wire.name != "true" && &mapping.wire.name != "false" {
-                                let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
-                                    &mapping.wire.name,
-                                    &eval_expr(wire_width, &component_variables),
-                                );
-                                signals.insert(sig);
-                            }
-
-                            let port_direction =
-                                &component_hdl.get_port(&mapping.port.name)?.direction;
-                            let (vhdl_port_name, port_range, wire_name, wire_range) =
-                                port_mapping(&component_hdl, mapping, &inferred_widths)?;
-
-                            if port_direction == &PortDirection::In {
-                                port_map.push(format!(
-                                    "{}{} => {}{}",
-                                    vhdl_port_name, port_range, wire_name, wire_range
-                                ));
-                            } else if &mapping.wire.name != "true" && &mapping.wire.name != "false"
-                            {
-                                let redirect_signal =
-                                    format!("{}_{}", component_id, vhdl_port_name);
-                                if redirected_ports.get(&vhdl_port_name).is_none() {
-                                    redirected_ports.insert(vhdl_port_name.clone());
-                                    port_map.push(format!(
-                                        "{}{} => {}{}",
-                                        vhdl_port_name, port_range, redirect_signal, wire_range
-                                    ));
-                                }
-                                writeln!(
-                                    &mut body_vhdl,
-                                    "{}{} <= {}{};",
-                                    wire_name, wire_range, redirect_signal, wire_range
-                                )
-                                .unwrap();
-
-                                let wire_width = inferred_widths.get(&mapping.wire.name).unwrap();
-                                let sig = print_signal(
-                                    &redirect_signal,
-                                    &eval_expr(wire_width, &component_variables),
-                                );
-                                signals.insert(sig);
-                            } else {
-                                port_map.push(format!(
-                                    "{}{} => {}",
-                                    vhdl_port_name, port_range, &mapping.wire.name
-                                ));
-                            }
-                        }
-
-                        writeln!(
-                            &mut body_vhdl,
-                            "{} : {}\n\t{}port map ({}, CLOCK_50 => CLOCK_50);\n",
-                            component_id,
-                            keyw(&c.name.value),
-                            generic_map,
-                            port_map.join(", ")
-                        )
-                        .unwrap();
-
-                        Ok(body_vhdl)
-                    })
-                    .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-                writeln!(
-                    &mut arch_vhdl,
-                    "n2vlp{} : for {} in {} to {} generate\n{} end generate n2vlp{};",
-                    component_counter,
-                    lp.iterator.value,
-                    lp.start,
-                    lp.end,
-                    body.join("\n"),
-                    component_counter
-                )?;
-            }
-            Part::AssignmentHDL(_a) => {}
-        }
-    }
-
-    // Add signal declarations and assignments to arch_vhdl
-    let mut ports = HashSet::<String>::new();
-    for port in &hdl.ports {
-        ports.insert(port.name.value.clone());
-    }
-    for a in assignments.clone() {
-        let mut declarations = HashSet::new();
-        let left_name = keyw(a.left.name.as_str());
-        let right_name = keyw(a.right.name.as_str());
-        // If one side of the assignment is actually a port, or if it has already been declared, ignore it
-        if !ports.contains(&left_name) && !declarations.contains(&left_name) {
-            writeln!(
-                &mut arch_vhdl,
-                "{}", 
-                print_signal(&left_name, &(a.left.end.unwrap() - a.left.start.unwrap()))
-            )?;
-            declarations.insert(left_name);
-        }
-        if !ports.contains(&right_name) && !declarations.contains(&right_name) {
-            writeln!(
-                &mut arch_vhdl,
-                "{}", 
-                print_signal(&right_name, &(a.right.end.unwrap() - a.right.start.unwrap()))
-            )?;
-            declarations.insert(right_name);
-        }
-    }
-    for a in assignments {
-        writeln!(
-            &mut arch_vhdl,
-            "{} <= {}",
-            keyw(a.left.name.as_str()), keyw(a.right.name.as_str())
-        )?;
-    }
-
-    for s in &signals {
-        writeln!(&mut signal_vhdl, "{}", s).unwrap();
-    }
-
-    // Actual chip definition
-    top_level_vhdl = top_level_vhdl + &signal_vhdl;
-    writeln!(&mut top_level_vhdl, "begin").unwrap();
-    top_level_vhdl = top_level_vhdl + &arch_vhdl;
-    writeln!(&mut top_level_vhdl, "end architecture arch;").unwrap();
-
-    let mut header_vhdl = String::new();
-    writeln!(&mut header_vhdl, "library ieee;").unwrap();
-    writeln!(&mut header_vhdl, "use ieee.std_logic_1164.all;").unwrap();
-    writeln!(&mut header_vhdl).unwrap();
-    top_level_vhdl = header_vhdl + &top_level_vhdl;
-
-    entities.insert(hdl.name.clone(), top_level_vhdl);
-
-    Ok(entities)
-}
-
-fn write_top_level_entity(hdl: &ChipHDL, top_level_vhdl: &mut String) {
-    writeln!(top_level_vhdl, "entity {} is", keyw(&hdl.name)).unwrap();
-    if !hdl.generic_decls.is_empty() {
-        writeln!(top_level_vhdl, "{}", generics(hdl)).unwrap();
-    }
-    writeln!(top_level_vhdl, "{}", ports(hdl)).unwrap();
-    writeln!(top_level_vhdl, "end entity {};", keyw(&hdl.name)).unwrap();
-    writeln!(top_level_vhdl).unwrap();
-}
-
-/// Generates VHDL corresponding to a component (and subcomponents). This will be the same
-/// for every instantiation of the component. It is generating the VHDL
-/// for that type of chip.
-fn generate_component_definition(
-    component: &Component,
-    provider: &Rc<dyn HdlProvider>,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    // We skip NAND because that is hard-coded and will be copied separately.
-    if &component.name.value.to_lowercase() == "nand" {
-        return Ok(HashMap::new());
-    }
-    if &component.name.value.to_lowercase() == "dff" {
-        return Ok(HashMap::new());
-    }
-
-    let component_hdl = get_hdl(&component.name.value, provider).unwrap();
-    synth_vhdl(&component_hdl, provider)
-}
-
-/// Generates the declaration for a component that can be included in the VHDL.
-/// of another chip that uses this component.
-fn generate_component_declaration(component: &Component, provider: &Rc<dyn HdlProvider>) -> String {
-    let component_hdl = get_hdl(&component.name.value, provider).unwrap();
-    let mut component_decl = String::new();
-    writeln!(
-        &mut component_decl,
-        "component {}",
-        keyw(&component_hdl.name)
-    )
-    .unwrap();
-    write!(&mut component_decl, "{}", generics(&component_hdl)).unwrap();
-    write!(&mut component_decl, "{}", ports(&component_hdl)).unwrap();
-    writeln!(&mut component_decl, "end component;").unwrap();
-    writeln!(&mut component_decl).unwrap();
-    component_decl
-}
-
-fn generate_components(hdl: &ChipHDL) -> Result<Vec<Component>, N2VError> {
-    let mut res = Vec::new();
-
-    let mut variables = HashMap::new();
-
-    for part in &hdl.parts {
-        match part {
-            Part::Component(c) => {
-                res.push(c.clone());
-            }
-            Part::Loop(l) => {
-                for e in [&l.start, &l.end] {
-                    let end = eval_expr(e, &HashMap::new());
-                    variables.insert(l.iterator.value.clone(), end);
-
-                    for c in &l.body {
-                        let mut new_c: Component = c.clone();
-                        for m in &mut new_c.mappings {
-                            m.port.start = m.port.start.as_ref().map(|x| eval_expr(x, &variables));
-                            m.port.end = m.port.end.as_ref().map(|x| eval_expr(x, &variables));
-                            m.wire.start = m.wire.start.as_ref().map(|x| eval_expr(x, &variables));
-                            m.wire.end = m.wire.end.as_ref().map(|x| eval_expr(x, &variables));
-                        }
-
-                        new_c.generic_params = new_c
-                            .generic_params
-                            .iter()
-                            .map(|x| eval_expr(x, &variables))
-                            .collect();
-
-                        res.push(new_c);
-                    }
-                }
-            }
-            Part::AssignmentHDL(_a) => {}
-        }
-    }
-
-    Ok(res)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::scanner::Scanner;
-    use std::path::PathBuf;
-    use tempfile::tempdir;
-
-    #[test]
-    // Just tests that we get some VHDL out.
-    fn test_lightson_nocrash() {
-        let mut scanner: Scanner;
-        let source_code;
-        let top_level_file = "resources/tests/de1-hdl/LightsOn.hdl";
-        let contents = fs::read_to_string(&top_level_file);
-        match contents {
-            Ok(sc) => {
-                source_code = sc;
-                scanner = Scanner::new(&source_code, PathBuf::from(&top_level_file));
-            }
-            Err(_) => panic!("Unable to read file."),
-        }
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
-        let hdl = parser.parse().expect("Parse error");
-        let base_path = String::from(
-            hdl.path
-                .as_ref()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .to_str()
-                .unwrap(),
-        );
-        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
-        let entities = crate::vhdl::synth_vhdl(&hdl, &provider).unwrap();
-        let temp_dir = tempdir().unwrap();
-        let quartus_dir = temp_dir.path().join("dummy");
-        crate::vhdl::create_quartus_project(&hdl, entities, &quartus_dir)
-            .expect("Unable to create project");
     }
 }

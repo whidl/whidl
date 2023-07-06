@@ -7,9 +7,9 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
-            "program": "${workspaceFolder}/target/debug/nand2vhdl",
-            "args": ["synth-vhdl", "-o", "lightson", "resources/de1-hdl/LightsOn.hdl"],
+            "name": "Debug synth-vhdl Bit",
+            "program": "${workspaceFolder}/target/debug/whidl",
+            "args": ["synth-vhdl", "resources/tests/nand2tetris/solutions/Bit.tst", "bit"],
             "cwd": "${workspaceFolder}"
         }
     ]

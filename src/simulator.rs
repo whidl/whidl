@@ -151,7 +151,7 @@ pub struct Assignment {
 // A chip constructed from parsed HDL.
 pub struct Chip {
     pub name: String,
-    hdl: Option<ChipHDL>, // This should probably be a reference. We don't need to have a zillion copies of the HDL.
+    pub hdl: Option<ChipHDL>, // This should probably be a reference. We don't need to have a zillion copies of the HDL.
     pub circuit: Circuit,
     pub ports: HashMap<String, Port>,
     input_port_nodes: Vec<NodeIndex>,
@@ -168,7 +168,7 @@ pub struct Chip {
     // for lazily elaborating itself. This is reference counted because
     // elaboration makes new chips with HdlProviders and we don't know
     // size at compilation time.
-    hdl_provider: Rc<dyn HdlProvider>,
+    pub hdl_provider: Rc<dyn HdlProvider>,
 
     // Values of variables (generics and iterators)
     variables: HashMap<String, usize>,
@@ -940,7 +940,7 @@ impl Chip {
         for a in assignments {
             // This could possibly return None--add dummy width to infer_widths
             let w = inferred_widths.get(&a.left.name).unwrap();
-            let usize_w = eval_expr_numeric(w, &generic_state)?;
+            let usize_w = eval_expr_numeric(w, generic_state)?;
             let left_bus = Bus {
                 name: a.left.name,
                 range: Some(0..usize_w),
@@ -1011,7 +1011,7 @@ impl Chip {
                 let cached_outputs = input_cache.get(&cache_entry).unwrap();
 
                 // set output signals directly
-                for o in cached_outputs.signals() {
+                for o in cached_outputs.keys() {
                     let width = cached_outputs.get_width(&o).unwrap();
                     let bus = Bus {
                         name: o.clone(),
@@ -1114,12 +1114,11 @@ fn optimize_circuit(circuit: &mut Circuit) {
     // each node index and get the neighbor edges for that node via
     // a detached iterator to avoid borrowing from the graph.
     for node_idx in all_nodes {
-        let neighbors: HashSet<NodeIndex> = circuit.neighbors(node_idx).into_iter().collect();
+        let neighbors: HashSet<NodeIndex> = circuit.neighbors(node_idx).collect();
         for neighbor in neighbors {
             // Edges connecting the two neighboring nodes
             let mut connecting_edges: Vec<EdgeIndex> = circuit
                 .edges_connecting(node_idx, neighbor)
-                .into_iter()
                 .map(|x| x.id())
                 .collect();
 
@@ -1669,25 +1668,22 @@ pub fn infer_widths(
                 }
             }
             for a in assignments {
-                match (
+                if let (None, None) = (
                     inferred_widths.get(&a.left.name.clone()),
                     inferred_widths.get(&a.right.name.clone()),
                 ) {
                     // If neither widths have a source, throw an error. This allows us to make assumptions about widths later on.
-                    (None, None) => {
-                        return Err(Box::new(N2VError {
-                            msg: format!(
-                                "Signals {} and {} have no source or destination.",
-                                &a.left.name.clone(),
-                                &a.right.name.clone(),
-                            ),
-                            kind: ErrorKind::ParseIdentError(
-                                provider.clone(),
-                                Identifier::from(a.right.name.clone().as_str()),
-                            ),
-                        }));
-                    }
-                    _ => {}
+                    return Err(Box::new(N2VError {
+                        msg: format!(
+                            "Signals {} and {} have no source or destination.",
+                            &a.left.name.clone(),
+                            &a.right.name.clone(),
+                        ),
+                        kind: ErrorKind::ParseIdentError(
+                            provider.clone(),
+                            Identifier::from(a.right.name.clone().as_str()),
+                        ),
+                    }));
                 }
             }
             break;
@@ -1701,11 +1697,8 @@ pub fn infer_widths(
 pub fn gather_assignments(parts: &Vec<Part>) -> Vec<AssignmentHDL> {
     let mut assignment_vec = Vec::new();
     for part in parts {
-        match part {
-            Part::AssignmentHDL(pa) => {
-                assignment_vec.push(pa.clone());
-            }
-            _ => {}
+        if let Part::AssignmentHDL(pa) = part {
+            assignment_vec.push(pa.clone());
         }
     }
 
@@ -1731,21 +1724,15 @@ mod test {
 
     fn make_simulator(file_name: &str) -> Simulator {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl(file_name).unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path(file_name));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, false, &Vec::new())
             .expect("Chip creation error");
@@ -2313,21 +2300,15 @@ mod test {
     #[test]
     fn test_optimize_circuit_and16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("And16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("And16.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2337,15 +2318,11 @@ mod test {
     #[test]
     fn test_optimize_circuit_useand16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = "CHIP And {
       IN a[16], b[16];
@@ -2356,9 +2333,7 @@ mod test {
       }";
 
         let mut scanner = Scanner::new(contents, provider.get_path("Blah.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2368,21 +2343,15 @@ mod test {
     #[test]
     fn test_optimize_circuit_inc16() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("nand2tetris")
-                .join("solutions")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir
+            .join("resources")
+            .join("tests")
+            .join("nand2tetris")
+            .join("solutions");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Inc16.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("Inc16.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
             .expect("Chip creation error");
@@ -2394,20 +2363,11 @@ mod test {
     #[test]
     fn test_assign_multiple_error() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssign.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_err());
@@ -2418,20 +2378,11 @@ mod test {
     #[test]
     fn test_assign_multiple_ok() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("TwoAssignOK.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssignOK.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_ok());
@@ -2441,20 +2392,11 @@ mod test {
     #[test]
     fn test_disconnected_component_inputs() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let base_path = String::from(
-            manifest_dir
-                .join("resources")
-                .join("tests")
-                .join("bad")
-                .to_str()
-                .unwrap(),
-        );
+        let base_path = manifest_dir.join("resources").join("tests").join("bad");
         let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(&base_path));
         let contents = provider.get_hdl("Disconnected.hdl").unwrap();
         let mut scanner = Scanner::new(contents.as_str(), provider.get_path("TwoAssign.hdl"));
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut parser = Parser::new(&mut scanner, provider.clone());
         let hdl = parser.parse().expect("Parse error");
         let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new());
         assert!(chip.is_err());

@@ -5,6 +5,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::ops::Range;
 
 use serde::Serialize;
 
@@ -26,6 +27,13 @@ impl GenericWidth {
         matches!(self, GenericWidth::Terminal(Terminal::Num(_)))
     }
 }
+
+impl From<&Range<usize>> for GenericWidth {
+    fn from(range: &Range<usize>) -> Self {
+        GenericWidth::Terminal(Terminal::Num(1 + (range.end - range.start)))
+    }
+}
+
 impl std::ops::Add<GenericWidth> for GenericWidth {
     type Output = GenericWidth;
 

@@ -1,0 +1,49 @@
+# Synthesizing VHDL
+
+## WHiDL usage
+
+The WHiDL subcommand to synthesize VHDL from HDL is `synth-vhdl`.
+
+Let's see how we can synthesizes the VHDL for a simple And gate. In 
+HDL, an AND gate can be implemented as so:
+
+```
+CHIP And {
+    IN a, b;
+    OUT out;
+
+    PARTS:
+    Nand(a=a, b=b, out=notOut);
+    Not(in=notOut, out=out);
+}
+```
+
+In the WHiDL repository, there is a copy of the And gate at `resources/tests/nand2tetris/solutions/And.hdl`.
+
+
+```bash
+whidl synth-vhdl --output-dir output resources/tests/nand2tetris/solutions/And.hdl
+```
+
+Replace output with your desired output directory. After running this command,
+you should have a new VHDL and TCL file for generating then Quartus Prime
+project in the specified output directory.
+
+You can see the generated VHDL for the `And` chip and all supporting chips in
+the output directory.
+
+WHiDL synthesizes and entire Quartus Prime project. If you are using
+the WHiDL codespace, then the free community edition of Quartus Prime will
+be preinstalled. From within the generated quartus prime project directory,
+the following commands can be used to compile the project.
+
+```
+quartus_sh -t project.tcl
+quartus_sh --flow compile And
+```
+
+## Synthesizing Tests
+
+In addition to converting VHDL entities to HDL chips, WHiDL can also
+convert nand2tetris into Modelsim tests. This detection happens automatically.
+

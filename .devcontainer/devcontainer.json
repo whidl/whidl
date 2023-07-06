@@ -2,13 +2,12 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/rust
 {
 	"name": "WHiDL",
-	"build": {
-		"dockerfile": "Dockerfile",
-	},
+	"image": "defreez/whidl-dev",
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
-		"seccomp=unconfined"
+		"seccomp=unconfined",
+		"--shm-size=8gb"
 	],
 
 	// Set *default* container specific settings.json values on container create.
@@ -39,6 +38,7 @@
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 	"features": {
-		"ghcr.io/devcontainers/features/sshd:1": {}
+		"ghcr.io/devcontainers/features/sshd:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
 	}
 }

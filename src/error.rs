@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 // Error type enum
+#[derive(Clone)]
 pub enum ErrorKind {
     ParseError(crate::scanner::Token),
     ParseIdentError(Rc<dyn HdlProvider>, crate::parser::Identifier),
@@ -16,14 +17,55 @@ pub enum ErrorKind {
     NonNumeric,
 }
 
+/// N2VError should be used when generating an error that has no other
+/// source error object. This is the start of the error propagation chain.
 pub struct N2VError {
     pub msg: String,
     pub kind: ErrorKind,
 }
 
+/// Transformed errors should be used when the source of the error is
+/// another error. This is propagating an error with a new message.
+pub struct TransformedError {
+    pub msg: String,
+    pub kind: ErrorKind,
+    pub source: Option<Box<dyn Error + 'static>>,
+}
+
 impl std::fmt::Debug for N2VError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Debug for TransformedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+/// This relies on the N2VError display implementation. It will print
+/// the entire error chain.
+impl std::fmt::Display for TransformedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.source.is_some() {
+            write!(f, "{}", N2VError::from(self))?;
+            let error_source = &**(self.source.as_ref().unwrap());
+            write!(f, "{}", error_source)
+        } else {
+            write!(f, "{}", N2VError::from(self))
+        }
+    }
+}
+
+/// Strips the source from a transformed error. This is used to
+/// display a TransformedError.
+impl From<&TransformedError> for N2VError {
+    fn from(e: &TransformedError) -> Self {
+        N2VError {
+            msg: e.msg.clone(),
+            kind: e.kind.clone(),
+        }
     }
 }
 
@@ -36,7 +78,7 @@ impl std::fmt::Display for N2VError {
                     Ok(x) => x,
                     Err(_) => {
                         writeln!(f, "In : {:?}", t.path.clone());
-                        return writeln!(f, "Error: {}", self.msg);
+                        return writeln!(f, "{}", self.msg);
                     }
                 };
 
@@ -65,10 +107,18 @@ impl std::fmt::Display for N2VError {
             }
             ErrorKind::ParseIdentError(provider, ident) => {
                 if ident.path.is_none() {
-                    return writeln!(f, "Error 1: {}", self.msg);
+                    return writeln!(f, "{}", self.msg);
                 }
                 if ident.line.is_none() {
-                    return writeln!(f, "Error 2: {}", self.msg);
+                    return writeln!(f, "{}", self.msg);
+                }
+
+                if ident.path.is_none() {
+                    return writeln!(f, "Bad path: {}", self.msg);
+                }
+
+                if ident.path.as_ref().unwrap().file_name().is_none() {
+                    return writeln!(f, "Bad filename: {}", self.msg);
                 }
 
                 if ident.path.is_none() {
@@ -92,7 +142,7 @@ impl std::fmt::Display for N2VError {
                     Ok(x) => x,
                     Err(e) => {
                         writeln!(f, "{:?}", e);
-                        return writeln!(f, "Error 3: {}", self.msg);
+                        return writeln!(f, "{}", self.msg);
                     }
                 };
 
@@ -109,17 +159,8 @@ impl std::fmt::Display for N2VError {
                 writeln!(f, "\n\n{}", self.msg)
             }
             _ => {
-                writeln!(f, "Error 4: {}", self.msg)
+                writeln!(f, "{}", self.msg)
             }
-        }
-    }
-}
-
-impl From<std::io::Error> for N2VError {
-    fn from(e: std::io::Error) -> Self {
-        N2VError {
-            msg: format!("IO Error: {}", e),
-            kind: ErrorKind::IOError,
         }
     }
 }
@@ -136,5 +177,20 @@ impl From<String> for N2VError {
 impl Error for N2VError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+impl Error for TransformedError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.source {
+            None => None,
+            // We store the source as an Box to a trait object.
+            // Dereference once to get the Box behind the self reference,
+            // and dereference the second time to get the inner trait object.
+            // We then return a reference to that inner trait object.
+            // This will be static lieftime because we return boxed dyn errors
+            // as our result error type everywhere.
+            Some(e) => Some(&**e),
+        }
     }
 }

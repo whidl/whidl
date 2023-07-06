@@ -1,21 +1,31 @@
+//! This module is responsible for reading test scripts (.tst files) in the
+//! nand2tetris test script format. The `bitvec` crate is used to support
+//! number system operations.
+//!
+//! The maximum test input size is 16 bits.
+
 use crate::busmap::BusMap;
 use crate::error::{ErrorKind, N2VError};
 use crate::parser::*;
-use crate::scanner::Scanner;
-use crate::simulator::{Bus, Chip, Port, Simulator};
+use crate::simulator::{Bus, Chip, Simulator};
 use crate::test_parser::*;
-/// For dealing with nand2tetris tests
 use crate::test_scanner::TestScanner;
+use crate::expr::eval_expr_numeric;
+
 use bitvec::prelude::*;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::{prelude::*, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
+use std::collections::HashMap;
 
-fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
+/// Converts a test input (string + number system) to a bit vector.
+///
+/// The bit vector is the binary representation of the input value.
+/// The most significant bit comes first, and the least significant bit last.
+pub fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     match input.number_system {
         NumberSystem::Decimal => {
             let num: i16 = input.value.parse().unwrap();
@@ -48,7 +58,9 @@ fn test_input_to_bitvec(input: &InputValue) -> BitVec<u16, Msb0> {
     }
 }
 
-fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
+/// Converts a bitvec to a vector of option bools. This conversion is
+/// necessary because the simulator uses `Vec<Option<bool>>` to represent inputs.
+pub fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
     let mut res = Vec::new();
     for bit in bv {
         res.push(Some(bit));
@@ -56,29 +68,41 @@ fn bitvec_to_vecbool(bv: BitVec<u16, Msb0>) -> Vec<Option<bool>> {
     res
 }
 
-/// Reads a nand2tetris cmp file and returns a busmap of values
-fn read_cmp(
-    path: &PathBuf,
-    test_script: &TestScript,
-    ports: &HashMap<String, Port>,
-) -> Result<Vec<BusMap>, N2VError> {
+/// Reads a nand2tetris .cmp file and returns a vector of busmaps.
+/// Each busmap represents a single line in the .cmp file.
+pub fn read_cmp(test_script: &TestScript) -> Result<Vec<BusMap>, Box<dyn Error>> {
     let mut res: Vec<BusMap> = Vec::new();
-    let file = fs::File::open(path).unwrap_or_else(|_| panic!("No such cmp file {:?}", path));
+    let file = fs::File::open(&test_script.cmp_path)
+        .unwrap_or_else(|_| panic!("No such cmp file {:?}", &test_script.cmp_path));
     let buf = BufReader::new(file);
 
     let mut lines = buf.lines();
 
     // Read header line and determine order of ports
-    let mut header = lines.next().unwrap().expect("Corrupted cmp file");
+    let header_result = match lines.next() {
+        Some(x) => x,
+        None => {
+            return Err(Box::new(N2VError {
+                msg: String::from("Corrupt cmp file. Expected more data."),
+                kind: ErrorKind::IOError,
+            }));
+        }
+    };
+
+    let mut header = match header_result {
+        Err(e) => return Err(Box::new(e)),
+        Ok(x) => x,
+    };
+
     header.retain(|c| !c.is_whitespace());
 
     // We need at least three characters for a valid header line:
     // two pipes and a single letter port name.
     if header.len() < 3 {
-        return Err(N2VError {
-            msg: format!("Header line for cmp file {:?} is too short. The header line is the first line of the .cmp file.", path),
-            kind: ErrorKind::Other,
-        });
+        return Err(Box::new(N2VError {
+            msg: format!("Header line for cmp file {:?} is too short. The header line is the first line of the .cmp file.", test_script.cmp_path),
+            kind: ErrorKind::IOError,
+        }));
     }
 
     let port_order: Vec<String> = header[1..header.len() - 1]
@@ -95,23 +119,23 @@ fn read_cmp(
         line.retain(|c| !c.is_whitespace());
 
         if line.len() < 3 {
-            return Err(N2VError {
+            return Err(Box::new(N2VError {
                 msg: format!(
                     "The line {} in {:?} is too short to be correct.",
-                    line, path
+                    line, test_script.cmp_path
                 ),
                 kind: ErrorKind::Other,
-            });
+            }));
         }
 
         for (i, v) in line[1..line.len() - 1].split('|').enumerate() {
             if i >= test_script.output_list.len() {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: format!(
-                        "The line {} in {:?} contains more columns than the test script output-list.", line, path
+                        "The line {} in {:?} contains more columns than the test script output-list.", line, test_script.cmp_path
                     ),
                     kind: ErrorKind::Other,
-                });
+                }));
             }
             let number_system = test_script.output_list[i].number_system.clone();
             if number_system == NumberSystem::String {
@@ -132,26 +156,30 @@ fn read_cmp(
             value.reverse();
 
             if i >= port_order.len() {
-                return Err(N2VError {
+                return Err(Box::new(N2VError {
                     msg: format!(
                         "The line {} in {:?} contains more columns than the header line.",
-                        line, path
+                        line, test_script.cmp_path
                     ),
                     kind: ErrorKind::Other,
-                });
+                }));
             }
 
-            let portw = match ports.get(&port_order[i]) {
-                None => {
-                    return Err(N2VError {
-                        msg: format!("CMP / HDL mismatch. The .cmp file refers to port `{}`, but the HDL file does not.", port_order[i]),
-                        kind: ErrorKind::Other,
-                    });
-                }
-                Some(x) => x,
-            };
+            let (hdl, _) = parse_hdl_path(&test_script.hdl_path)?;
+            let mut variables = HashMap::new();
+            for gv in 0..hdl.generic_decls.len() {
+                variables.insert(hdl.generic_decls[gv].value.clone(), test_script.generics[gv]);
+            }
 
-            value.truncate(portw.width);
+
+            let mut port_width = 0;
+            for p in hdl.ports {
+                if p.name.value == port_order[i] {
+                    port_width = eval_expr_numeric(&p.width, &variables)?;
+                }
+            }
+            value.truncate(port_width);
+
             value.reverse();
             step_result.create_bus(&port_order[i], value.len()).unwrap();
             let bus = Bus {
@@ -166,71 +194,39 @@ fn read_cmp(
     Ok(res)
 }
 
-pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
-    // Parse the test script
+pub fn parse_test(test_script_path: &Path) -> Result<TestScript, Box<dyn Error>> {
     let test_pathbuf = PathBuf::from(test_script_path);
     let test_contents = read_test(&test_pathbuf)?;
-    let mut test_scanner = TestScanner::new(test_contents.as_str(), test_pathbuf.clone());
+    let mut test_scanner = TestScanner::new(test_contents.as_str(), test_pathbuf);
     let mut test_parser = TestParser {
         scanner: &mut test_scanner,
     };
-    let test_script = test_parser.parse().expect("Parse failure");
-    let hdl_path = test_pathbuf.parent().unwrap().join(&test_script.hdl_file);
+    test_parser.parse()
+}
+
+/// Runs a test script.
+///
+/// If a test fails a message will print to stdout and this function
+/// returns an error.
+pub fn run_test(test_script_path: &Path) -> Result<(), Box<dyn Error>> {
+    //let hdl_path = test_pathbuf.parent().unwrap().join(&test_script.hdl_file);
+    let test_script = parse_test(test_script_path)?;
+    let (hdl, file_reader) = parse_hdl_path(&test_script.hdl_path)?;
+    let provider: Rc<dyn HdlProvider> = Rc::new(file_reader);
 
     // Create simulator for HDL file referenced by test script.
-    let base_path = hdl_path.parent().unwrap().to_str().unwrap();
-    let hdl_file = hdl_path.file_name().unwrap().to_str().unwrap();
-    let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-    let contents = provider.get_hdl(hdl_file).unwrap();
-    let mut scanner = Scanner::new(contents.as_str(), provider.get_path(hdl_file));
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = match parser.parse() {
-        Ok(x) => x,
-        Err(x) => {
-            println!("{}", x);
-            std::process::exit(1);
-        }
-    };
 
-    let chip = match Chip::new(
-        &hdl,
-        ptr::null_mut(),
-        &provider,
-        false,
-        &test_script.generics,
-    ) {
-        Ok(x) => x,
-        Err(x) => {
-            println!("{}", x);
-            std::process::exit(1);
-        }
-    };
-
-    let mut simulator = Simulator::new(chip);
-
-    let hdl_contents = fs::read_to_string(hdl_path.clone()).expect("Unable to read HDL file.");
-    let mut scanner = Scanner::new(hdl_contents.as_str(), hdl_path);
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
-    let hdl = parser.parse().expect("Parse error");
     let chip = Chip::new(
         &hdl,
         ptr::null_mut(),
         &provider,
         false,
         &test_script.generics,
-    )
-    .expect("Chip creation error");
+    )?;
 
-    let ports = chip.ports;
-    let compare_path = test_pathbuf
-        .parent()
-        .unwrap()
-        .join(&test_script.compare_file);
-    let expected = read_cmp(&compare_path, &test_script, &ports)?;
+    let mut simulator = Simulator::new(chip);
+
+    let expected = read_cmp(&test_script)?;
 
     let mut inputs = BusMap::new();
     let mut cmp_idx = 0;
@@ -240,7 +236,9 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
         for instruction in &step.instructions {
             match instruction {
                 Instruction::Set(port, value) => {
-                    let width = ports
+                    let width = simulator
+                        .chip
+                        .ports
                         .get(port)
                         .unwrap_or_else(|| panic!("No width for port {}", port))
                         .width;
@@ -256,6 +254,7 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
                     print!(".");
                 }
                 Instruction::Output => {
+                    #[allow(clippy::neg_cmp_op_on_partial_ord)]
                     if !(expected[cmp_idx] <= outputs.clone()) {
                         println!("❌ Step: {}", cmp_idx + 1);
                         println!("Expected: {}", expected[cmp_idx]);
@@ -266,11 +265,11 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
                     cmp_idx += 1;
                 }
                 Instruction::Tick => {
-                    outputs = simulator.simulate(&inputs).expect("simulation failure");
+                    outputs = simulator.simulate(&inputs)?;
                 }
                 Instruction::Tock => {
                     simulator.tick().expect("Tick failure");
-                    outputs = simulator.simulate(&inputs).expect("simulation failure");
+                    outputs = simulator.simulate(&inputs)?;
                 }
             }
         }
@@ -295,6 +294,7 @@ pub fn run_test(test_script_path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Reads test script file and returns its contents as a String.
 fn read_test(path: &PathBuf) -> Result<String, Box<dyn Error>> {
     Ok(fs::read_to_string(path)?)
 }
@@ -312,188 +312,188 @@ mod test {
     #[test]
     fn test_nand2tetris_solution_not() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Not.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_and() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/And.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_or() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Or.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_xor() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Xor.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_not16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Not16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_and16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/And16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux4way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux4Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_dmux8way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/DMux4Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_mux4way16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Mux4Way16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_or8way() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Or8Way.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_halfadder() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/HalfAdder.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_fulladder() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/HalfAdder.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_alu() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/ALU.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_bit() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Bit.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_register() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Register.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram8() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM8.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram512() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM512.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram4k() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM4K.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_ram16k() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/RAM16K.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_add16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Add16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_inc16() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/Inc16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_pc() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/PC.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_nand2tetris_solution_cpu() {
         let path = construct_path(&PathBuf::from("nand2tetris/solutions/CPU.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
     #[test]
     fn test_buffer() {
         let path = construct_path(&PathBuf::from("buffer/Buffer.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
     #[test]
     fn test_buffer2() {
         let path = construct_path(&PathBuf::from("buffer/Buffer2.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
     #[test]
     fn test_buffer3() {
         let path = construct_path(&PathBuf::from("buffer/BufferTest3.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
     #[test]
     fn test_buffer4() {
         let path = construct_path(&PathBuf::from("buffer/Buffer4.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_arm_add16() {
         let path = construct_path(&PathBuf::from("arm/Add16.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 
     #[test]
     fn test_arm_ops_mux8way3() {
         let path = construct_path(&PathBuf::from("arm/Mux8Way3.tst"));
-        assert!(run_test(path.to_str().unwrap()).is_ok());
+        assert!(run_test(&path).is_ok());
     }
 }

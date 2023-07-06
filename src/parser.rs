@@ -6,8 +6,10 @@ use crate::Scanner;
 use serde::Serialize;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::fmt;
+
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -15,6 +17,16 @@ pub enum Part {
     Component(Component),
     Loop(Loop),
     AssignmentHDL(AssignmentHDL),
+}
+
+impl fmt::Display for Part {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Part::Component(component) => write!(f, "{}", component),
+            Part::Loop(loop_part) => write!(f, "{}", loop_part),
+            Part::AssignmentHDL(assignment) => write!(f, "{}", assignment),
+        }
+    }
 }
 
 /// The Parse Tree for an HDL Chip.
@@ -25,13 +37,48 @@ pub struct ChipHDL {
     pub parts: Vec<Part>,
     pub path: Option<PathBuf>,
     pub generic_decls: Vec<Identifier>,
+    pub provider: Rc<dyn HdlProvider>,
 }
 
 impl std::fmt::Display for ChipHDL {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: PORTS({:?})", self.name, self.ports)
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "CHIP {} {{", self.name)?;
+
+        write!(f, "    IN ")?;
+        let input_ports: Vec<_> = self.ports.iter()
+            .filter(|port| matches!(port.direction, PortDirection::In))
+            .collect();
+        for (i, port) in input_ports.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", port.name)?;
+        }
+        writeln!(f, ";")?;
+
+        write!(f, "    OUT ")?;
+        let output_ports: Vec<_> = self.ports.iter()
+            .filter(|port| matches!(port.direction, PortDirection::Out))
+            .collect();
+        for (i, port) in output_ports.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", port.name)?;
+        }
+        writeln!(f, ";")?;
+
+        for part in &self.parts {
+            writeln!(f, "\t{}", part)?;
+        }
+
+        writeln!(f, "}}")?;
+
+        Ok(())
     }
 }
+
+
 
 impl ChipHDL {
     pub fn get_port(&self, name: &str) -> Result<&GenericPort, Box<dyn Error>> {
@@ -52,18 +99,14 @@ pub trait HdlProvider {
     fn get_path(&self, file_name: &str) -> PathBuf;
 }
 
+#[derive(Clone)]
 pub struct FileReader {
     base_path: PathBuf,
 }
 
 impl FileReader {
-    pub fn new(base_path: &str) -> FileReader {
-        if base_path.is_empty() {
-            panic!("empty basepath, start file paths in the same directory with ./");
-        }
-        FileReader {
-            base_path: PathBuf::from(base_path),
-        }
+    pub fn new(base_path: &Path) -> FileReader {
+        FileReader { base_path: base_path.to_path_buf() }
     }
 }
 
@@ -93,6 +136,12 @@ pub struct Identifier {
     pub value: String,
     pub path: Option<PathBuf>, // Set to None if chip not read from disk, e.g. NAND and DFF.
     pub line: Option<u32>,
+}
+
+impl std::fmt::Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 impl From<Token> for Identifier {
@@ -132,12 +181,26 @@ pub struct GenericPort {
     pub direction: PortDirection,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Component {
     pub name: Identifier,
-    pub mappings: Vec<PortMapping>,
+    pub mappings: Vec<PortMappingHDL>,
     pub generic_params: Vec<GenericWidth>,
 }
+
+impl fmt::Display for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        for (i, mapping) in self.mappings.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", mapping)?;
+        }
+        write!(f, ");")
+    }
+}
+
 
 #[derive(Clone)]
 pub struct Loop {
@@ -147,11 +210,27 @@ pub struct Loop {
     pub body: Vec<Component>, // Prevent nested loops.
 }
 
+impl fmt::Display for Loop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "FOR {} FROM {} TO {}", self.iterator, self.start, self.end)?;
+        for component in &self.body {
+            writeln!(f, "{}", component)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 /// Designates two wire names. The signal from the right wire will be assigned to the left.
 pub struct AssignmentHDL {
     pub left: BusHDL,
     pub right: BusHDL,
+}
+
+impl fmt::Display for AssignmentHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} <= {};", self.left, self.right)
+    }
 }
 
 #[derive(Serialize, Clone, PartialEq, Eq, Hash, Debug)]
@@ -161,12 +240,45 @@ pub struct BusHDL {
     pub end: Option<GenericWidth>,
 }
 
+impl fmt::Display for BusHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let (Some(start), Some(end)) = (&self.start, &self.end) {
+            write!(f, "{}[{}..{}]", self.name, start, end)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
 //  Not(in=sel, out=notSel); has two wires { name : "sel", port: "in" }, { name : "notSel", port: "out" }
-#[derive(Clone)]
-pub struct PortMapping {
+#[derive(Clone, Debug)]
+pub struct PortMappingHDL {
     pub wire_ident: Identifier,
     pub wire: BusHDL,
     pub port: BusHDL,
+}
+
+impl fmt::Display for PortMappingHDL {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}={}", self.port, self.wire_ident)
+    }
+}
+
+/// Parses and on-disk HDL file.
+///
+/// - `hdl_path`: Path to the HDL file to parse.
+///
+/// Returns a tuple of the parsed HDL and the accompanying FileReader
+/// HDL provider.
+pub fn parse_hdl_path(hdl_path: &Path) -> Result<(ChipHDL, FileReader), Box<dyn Error>> {
+    let base_path = hdl_path.parent().unwrap();
+    let hdl_file = hdl_path.file_name().unwrap().to_str().unwrap();
+    let provider = FileReader::new(base_path);
+    let contents = provider.get_hdl(hdl_file).unwrap();
+    let mut scanner = Scanner::new(contents.as_str(), provider.get_path(hdl_file));
+    let mut parser = Parser::new(&mut scanner, Rc::new(provider.clone()));
+    let hdl = parser.parse()?;
+    Ok((hdl, provider))
 }
 
 /// Looks up chip definition for a chip.
@@ -197,6 +309,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             parts: Vec::new(),
             path: None,
             generic_decls: Vec::new(),
+            provider: provider.clone()
         });
     } else if name.to_lowercase() == "dff" {
         // Hard-coded DFF chip
@@ -217,6 +330,7 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
             parts: Vec::new(),
             path: None,
             generic_decls: Vec::new(),
+            provider: provider.clone(),
         });
     }
 
@@ -225,17 +339,23 @@ pub fn get_hdl(name: &str, provider: &Rc<dyn HdlProvider>) -> Result<ChipHDL, Bo
 
     let contents = provider.get_hdl(path.to_str().unwrap())?;
     let mut scanner = Scanner::new(contents.as_str(), path);
-    let mut parser = Parser {
-        scanner: &mut scanner,
-    };
+    let mut parser = Parser::new(&mut scanner, provider.clone());
     parser.parse()
 }
 
 pub struct Parser<'a, 'b> {
     pub scanner: &'a mut Scanner<'b>,
+    provider: Rc<dyn HdlProvider>,
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
+    pub fn new(scanner: &'a mut Scanner<'b>, provider: Rc<dyn HdlProvider>) -> Parser<'a, 'b> {
+        Parser {
+            scanner,
+            provider
+        }
+    }
+
     pub fn parse(&mut self) -> Result<ChipHDL, Box<dyn Error>> {
         self.chip()
     }
@@ -298,6 +418,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             parts,
             path: Some(self.scanner.path.clone()),
             generic_decls: generics,
+            provider: self.provider.clone(),
         })
     }
 
@@ -685,12 +806,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                 // wire_ident if the rhs, ident is the left-hand side
                 let assign = AssignmentHDL {
                     left: BusHDL {
-                        name: ident.lexeme.clone(),
+                        name: ident.lexeme,
                         start: ident_bus_widths.0,
                         end: ident_bus_widths.1,
                     },
                     right: BusHDL {
-                        name: wire_ident.lexeme.clone(),
+                        name: wire_ident.lexeme,
                         start: wire_ident_bus_widths.0,
                         end: wire_ident_bus_widths.1,
                     },
@@ -701,11 +822,11 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         }
 
-        return Ok(Part::Component(Component {
+        Ok(Part::Component(Component {
             name: Identifier::from(ident),
             generic_params: self.generics()?,
             mappings: self.port_mappings()?,
-        }));
+        }))
     }
 
     fn port_width(&mut self) -> Result<GenericWidth, Box<dyn Error>> {
@@ -751,7 +872,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn port_mappings(&mut self) -> Result<Vec<PortMapping>, Box<dyn Error>> {
+    fn port_mappings(&mut self) -> Result<Vec<PortMappingHDL>, Box<dyn Error>> {
         let mut mappings = Vec::new();
 
         self.consume(TokenType::LeftParen)?;
@@ -769,7 +890,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     let wire = self.consume(TokenType::Identifier)?;
                     let (wire_start, wire_end) = self.bus_idx()?;
 
-                    mappings.push(PortMapping {
+                    mappings.push(PortMappingHDL {
                         wire_ident: Identifier::from(t.clone()),
                         wire: BusHDL {
                             name: wire.lexeme,
@@ -854,10 +975,9 @@ mod test {
     fn test_nand2tetris_solution_mux() {
         let path = PathBuf::from("nand2tetris/solutions/Mux.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -865,10 +985,9 @@ mod test {
     fn test_nand2tetris_solution_not16() {
         let path = PathBuf::from("nand2tetris/solutions/Not16.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -876,10 +995,9 @@ mod test {
     fn test_nand2tetris_solution_and16() {
         let path = PathBuf::from("nand2tetris/solutions/And16.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -887,10 +1005,9 @@ mod test {
     fn test_nand2tetris_solution_or8way() {
         let path = PathBuf::from("nand2tetris/solutions/Or8Way.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -898,10 +1015,9 @@ mod test {
     fn test_nand2tetris_solution_not() {
         let path = PathBuf::from("nand2tetris/solutions/Not.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -909,10 +1025,9 @@ mod test {
     fn test_nand2tetris_solution_alu() {
         let path = PathBuf::from("nand2tetris/solutions/ALU.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -920,10 +1035,9 @@ mod test {
     fn test_buffer() {
         let path = PathBuf::from("buffer/Buffer.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 
@@ -931,10 +1045,9 @@ mod test {
     fn test_arm_muxgen() {
         let path = PathBuf::from("arm/MuxGen.hdl");
         let contents = read_hdl(&path);
-        let mut scanner = Scanner::new(contents.as_str(), path);
-        let mut parser = Parser {
-            scanner: &mut scanner,
-        };
+        let mut scanner = Scanner::new(contents.as_str(), path.clone());
+        let provider = Rc::new(FileReader::new(&path));
+        let mut parser = Parser::new(&mut scanner, provider);
         parser.parse().expect("Parse error");
     }
 }

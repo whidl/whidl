@@ -1,38 +1,46 @@
-use crate::error::{ErrorKind, N2VError};
-use crate::test_scanner::{TestScanner, Token, TokenType};
+use std::error::Error;
+use std::ops::Range;
 use std::path::PathBuf;
+
+use crate::error::{ErrorKind, N2VError};
+use crate::simulator::Bus;
+use crate::test_scanner::{TestScanner, Token, TokenType};
 
 /// The Parse Tree for an HDL Chip.
 ///
 #[derive(Clone)]
 pub struct TestScript {
-    pub path: Option<PathBuf>,
-    pub hdl_file: PathBuf,
-    pub output_file: PathBuf,
-    pub compare_file: PathBuf,
+    pub test_path: PathBuf,
+    pub hdl_path: PathBuf,
+    pub output_path: PathBuf,
+    pub cmp_path: PathBuf,
     pub output_list: Vec<OutputFormat>,
     pub steps: Vec<Step>,
     pub generics: Vec<usize>,
 }
 
-#[derive(Clone)]
-pub enum Instruction {
-    Set(String, InputValue), // (port name, port value)
-    Eval,
-    Output,
-    Tick,
-    Tock,
-}
-
+/// An input value for a port in the test script.
+/// An input is a string, and the number system used to interpret that string.
 #[derive(Clone)]
 pub struct InputValue {
     pub number_system: NumberSystem,
     pub value: String,
 }
 
+/// A step consists of a sequence of instructions.
 #[derive(Clone)]
 pub struct Step {
     pub instructions: Vec<Instruction>,
+}
+#[derive(Clone)]
+
+/// An single action for the simulator to perform.
+pub enum Instruction {
+    Set(String, InputValue), // (port name, port value) set port name to port value.
+    Eval,                    // Run the simulator on the current inputs.
+    Output,                  // Print/verify the results.
+    Tick,                    // first half of clock cycle.
+    Tock,                    // second half of clock cycle.
 }
 
 #[derive(Clone)]
@@ -42,6 +50,18 @@ pub struct OutputFormat {
     pub space_before: usize,
     pub output_columns: usize,
     pub space_after: usize,
+}
+
+impl From<&OutputFormat> for Bus {
+    fn from(o: &OutputFormat) -> Self {
+        Bus {
+            name: o.port_name.clone(),
+            range: Some(Range {
+                start: 0,
+                end: o.output_columns - 1,
+            }),
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -78,14 +98,14 @@ pub struct TestParser<'a, 'b> {
 }
 
 impl<'a, 'b> TestParser<'a, 'b> {
-    pub fn parse(&mut self) -> Result<TestScript, N2VError> {
+    pub fn parse(&mut self) -> Result<TestScript, Box<dyn Error>> {
         self.test_script()
     }
 
-    fn consume(&mut self, tt: TokenType) -> Result<Token, N2VError> {
+    fn consume(&mut self, tt: TokenType) -> Result<Token, Box<dyn Error>> {
         let t = self.scanner.next();
         match &t {
-            None => Err(N2VError {
+            None => Err(Box::new(N2VError {
                 msg: format!("Early end of file expected {:?}", tt),
                 kind: ErrorKind::TestParseError(Token {
                     lexeme: String::from(""),
@@ -93,40 +113,49 @@ impl<'a, 'b> TestParser<'a, 'b> {
                     line: self.scanner.line,
                     token_type: TokenType::Eof,
                 }),
-            }),
+            })),
             Some(t) => {
                 if t.token_type == tt {
                     Ok(t.clone())
                 } else {
-                    Err(N2VError {
+                    Err(Box::new(N2VError {
                         msg: format!(
                             "Expected token type {:?}, found {:?} ({})",
                             tt, t.token_type, t.lexeme
                         ),
                         kind: ErrorKind::TestParseError(t.clone()),
-                    })
+                    }))
                 }
             }
         }
     }
 
-    fn test_script(&mut self) -> Result<TestScript, N2VError> {
+    fn test_script(&mut self) -> Result<TestScript, Box<dyn Error>> {
         // Load cannot be a keyword because it is used as a port name.
         if self.consume(TokenType::Identifier).unwrap().lexeme != "load" {
-            panic!("Expected load.");
+            return Err(Box::new(N2VError {
+                msg: String::from("Expected load"),
+                kind: ErrorKind::Other,
+            }));
         }
 
         let generics = self.generics()?;
 
-        let hdl_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        // Use the full path to the HDL file, not relative to test script.
+        let test_path = self.scanner.path.clone();
+        let hdl_path = test_path.parent().unwrap().join(PathBuf::from(
+            self.consume(TokenType::Identifier).unwrap().lexeme,
+        ));
         self.consume(TokenType::Comma)?;
 
         self.consume(TokenType::OutputFile)?;
-        let output_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        let output_path = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
         self.consume(TokenType::Comma)?;
 
         self.consume(TokenType::CompareTo)?;
-        let compare_file = PathBuf::from(self.consume(TokenType::Identifier).unwrap().lexeme);
+        let cmp_path = test_path.parent().unwrap().join(PathBuf::from(
+            self.consume(TokenType::Identifier).unwrap().lexeme,
+        ));
         self.consume(TokenType::Comma)?;
 
         let output_list = self.output_list()?;
@@ -136,17 +165,17 @@ impl<'a, 'b> TestParser<'a, 'b> {
         // match in ports (can out ports come before in ports?)
         // match out ports
         Ok(TestScript {
-            path: Some(self.scanner.path.clone()),
-            hdl_file,
-            compare_file,
-            output_file,
+            test_path,
+            hdl_path,
+            cmp_path,
+            output_path,
             output_list,
             steps,
             generics,
         })
     }
 
-    fn steps(&mut self) -> Result<Vec<Step>, N2VError> {
+    fn steps(&mut self) -> Result<Vec<Step>, Box<dyn Error>> {
         let mut res: Vec<Step> = Vec::new();
         loop {
             if self.scanner.peek().is_none() {
@@ -239,7 +268,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         Instruction::Output
     }
 
-    fn output_list(&mut self) -> Result<Vec<OutputFormat>, N2VError> {
+    fn output_list(&mut self) -> Result<Vec<OutputFormat>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         self.consume(TokenType::OutputList)?;
@@ -318,7 +347,7 @@ impl<'a, 'b> TestParser<'a, 'b> {
         Ok(res)
     }
 
-    fn generics(&mut self) -> Result<Vec<usize>, N2VError> {
+    fn generics(&mut self) -> Result<Vec<usize>, Box<dyn Error>> {
         let mut res = Vec::new();
 
         if self.scanner.peek().unwrap().token_type != TokenType::LeftAngle {

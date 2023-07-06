@@ -45,6 +45,7 @@ export default function Nav() {
             <TreeItem nodeId="loops" label="Loops" />
             <TreeItem nodeId="usage" label="Using whidl" />
             <TreeItem nodeId="truth-tables" label="Truth Table Generator" />
+            <TreeItem nodeId="synth-vhdl" label="VHDL Synthesis" />
         </TreeView>
     );
 }
