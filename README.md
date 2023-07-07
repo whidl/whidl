@@ -9,9 +9,8 @@ simplicity of the original HDL.
 
 ## Quick Start
 
-WHiDL is designed to be quick and easy to get up and running. The following
-steps will guide you through the process of getting WHiDL running on GitHub
-Codespaces.
+The following steps will guide you through the process of getting WHiDL running
+on GitHub Codespaces and converting a simple Mux chip from HDL to VHDL.
 
 ### Prerequisites
 
