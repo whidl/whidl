@@ -16,7 +16,7 @@ on GitHub Codespaces and converting a simple Mux chip from HDL to VHDL.
 
 Ensure that your codespace configuration has a minimum of 64GB of disk space.
 Selecting one of the smaller two codespace configurations (2 or 4 cores) may
-result in running out of disk space and subsequent build failure.
+result in running out of disk space and consequent build failure.
 
 ### Building WHiDL
 
