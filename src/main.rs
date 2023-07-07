@@ -5,7 +5,6 @@ mod error;
 mod expr;
 mod modelsim;
 mod parser;
-mod rom;
 mod scanner;
 mod simulator;
 mod test_parser;
@@ -23,7 +22,6 @@ use vhdl::VhdlEntity;
 
 use clap::Parser as ArgParser;
 use clap::Subcommand;
-use object::{Object, ObjectSection};
 use parser::Parser;
 use scanner::Scanner;
 use std::error::Error;
@@ -71,13 +69,6 @@ enum Commands {
         #[clap(short, long, action)]
         test_file: String,
     },
-
-    /// Synthesizes CS 314 ROM from .text section of ELF binary
-    /// Does not yet support .data or .bss sections
-    Rom { thumb_binary: String },
-
-    /// Decodes a thumb binary and prints the .text section as machine cod
-    Decode { thumb_binary: String },
 }
 
 // TODO: Remove duplication from this function.
@@ -189,50 +180,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Commands::Test { test_file } => {
             run_test(&PathBuf::from(test_file))?;
-        }
-        Commands::Rom { thumb_binary } => {
-            let bin_data = fs::read(thumb_binary)?;
-            let obj_file = object::File::parse(&*bin_data)?;
-
-            if let Some(section) = obj_file.section_by_name(".text") {
-                let data = section.data()?;
-
-                let mut instructions: Vec<Vec<bool>> = Vec::new();
-                for d in (1..data.len()).step_by(2) {
-                    let mut bool_vec = crate::rom::u8_to_bools(&data[d - 1]);
-                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d]));
-                    instructions.push(bool_vec);
-                }
-
-                let roms = crate::rom::create_rom(&instructions)?;
-                for rom in roms {
-                    println!("{}", rom);
-                }
-            } else {
-                return Err(Box::new(N2VError {
-                    msg: String::from("Text section is not available."),
-                    kind: ErrorKind::Other,
-                }));
-            }
-        }
-        Commands::Decode { thumb_binary } => {
-            let bin_data = fs::read(thumb_binary)?;
-            let obj_file = object::File::parse(&*bin_data)?;
-
-            if let Some(section) = obj_file.section_by_name(".text") {
-                let data = section.data()?;
-
-                for d in (1..data.len()).step_by(2) {
-                    let mut bool_vec = crate::rom::u8_to_bools(&data[d - 1]);
-                    bool_vec.append(&mut crate::rom::u8_to_bools(&data[d]));
-                    println!("{}", crate::rom::bools_bin_str(&bool_vec));
-                }
-            } else {
-                return Err(Box::new(N2VError {
-                    msg: String::from("Text section is not available."),
-                    kind: ErrorKind::Other,
-                }));
-            }
         }
     }
     Ok(())

@@ -5,7 +5,7 @@ use crate::error::{ErrorKind, N2VError, TransformedError};
 use crate::expr::{GenericWidth, Terminal};
 use crate::opt::optimization::{OptimizationPass, OptimizationInfo};
 use crate::opt::sequential::SequentialPass;
-use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser, Part, Component, Identifier, PortDirection};
+use crate::parser::{parse_hdl_path, FileReader, HdlProvider, Parser, Part, Component, Identifier};
 use crate::scanner::Scanner;
 use crate::simulator::Chip;
 use crate::test_parser::{OutputFormat, TestScript};
@@ -68,7 +68,6 @@ impl TryFrom<&TestScript> for TestBench {
 
         // Add a part to the HDL for the chip being tested.
         // Hack for now to trigger component declaration.
-        let value = &hdl.name.clone();
         let p = Part::Component(Component {
             name: Identifier::from(hdl.name.as_str()),
             mappings: Vec::new(),
@@ -231,7 +230,7 @@ impl TryFrom<&TestBench> for VhdlEntity {
 
         // Create a clock port if this is a sequential chip.
         let mut sequential_pass = SequentialPass::new();
-        let (_, sequential_pass_info_raw) = sequential_pass.apply(&chip.hdl.as_ref().unwrap(), &chip.hdl_provider)?;
+        let (_, sequential_pass_info_raw) = sequential_pass.apply(chip.hdl.as_ref().unwrap(), &chip.hdl_provider)?;
         let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
 
         if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =

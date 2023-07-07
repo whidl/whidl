@@ -22,7 +22,7 @@ use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
 use crate::simulator::Chip;
-use crate::simulator::{infer_widths, Port};
+use crate::simulator::{infer_widths};
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
@@ -325,7 +325,7 @@ impl VhdlEntity {
                         writeln!(decl, "clk : in std_logic_vector(0 downto 0);")?;
                     }
                 }
-                _ => (),
+                OptimizationInfo::None => unimplemented!(),
             },
             None => (),
         }
@@ -887,7 +887,7 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         keyw(&qp.chip_vhdl.name)
     )?;
 
-    writeln!(tcl, "set_global_assignment -name VHDL_FILE NAND.vhdl");
+    writeln!(tcl, "set_global_assignment -name VHDL_FILE NAND.vhdl")?;
     let chip_filename = qp.chip_vhdl.name.clone() + ".vhdl";
     writeln!(
         tcl,
