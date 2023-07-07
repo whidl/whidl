@@ -14,14 +14,14 @@ on GitHub Codespaces and converting a simple Mux chip from HDL to VHDL.
 
 ### Prerequisites
 
-Ensure that your Codespace configuration has a minimum of 64GB of disk space.
-Selecting one of the smaller two Codespace configurations (2 or 4 cores) may
+Ensure that your codespace configuration has a minimum of 64GB of disk space.
+Selecting one of the smaller two codespace configurations (2 or 4 cores) may
 result in running out of disk space and subsequent build failure.
 
 ### Building WHiDL
 
-1. Create a Codespace from this repository.
-2. Once the Codespace has finished building, execute the following commands to build and test WHiDL:
+1. Create a codespace from this repository.
+2. Once the codespace has finished building, execute the following commands to build and test WHiDL:
 
 ```shell
 cargo build --release
@@ -37,28 +37,12 @@ target/release/whidl synth-vhdl resources/tests/nand2tetris/solutions/Mux.tst Mu
 ```
 
 This command will convert the Nand2Tetris Mux test and all component chips into
-VHDL, generate a Quartus Prime project for the DE1-SoC board, and generate
-a Modelsim testbench.
+VHDL, generate a Quartus Prime project for the DE1-SoC board, generate
+a Modelsim testbench, and place these files in the newly created `MuxQuickstart` directory.
 
-The output files include:
+The two primary output files are:
 * `Mux.tst.vhdl` - the testbench to run under Modelsim
 * `Mux.vhdl` - the VHDL for the Mux chip itself
-
-### Compiling the VHDL Code
-
-1. Run the following command to set up the project:
-
-```shell
-quartus_sh -t project.tcl
-```
-
-2. Run the following command to compile the Mux project:
-
-```shell
-quartus_sh --flow compile Mux
-```
-
-The output file, `Mux.sof`, can be used by the Quartus Prime programmer to program a DE1-SoC board.
 
 ### Running the Modelsim tests
 
@@ -69,6 +53,16 @@ vlib work
 vcom *.vhdl
 vsim -c Mux_tst -do "run 100ns; quit"
 ```
+
+### Compiling the Quartus Prime project
+
+```shell
+quartus_sh -t project.tcl
+quartus_sh --flow compile Mux
+```
+
+The output file, `Mux.sof`, can be used by the Quartus Prime programmer to program a DE1-SoC board.
+The details of using the Quartus Prime programmer are beyond the scope of this guide.
 
 ## Docs
 
