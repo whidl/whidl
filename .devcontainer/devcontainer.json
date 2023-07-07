@@ -2,7 +2,9 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/rust
 {
 	"name": "WHiDL",
-	"image": "defreez/whidl-dev",
+	"build": {
+		"dockerfile": "Dockerfile",
+	},
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
