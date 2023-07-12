@@ -1,8 +1,9 @@
-use std::error::Error;
+use std::fmt;
 
 use crate::{simulator::Chip, parser};
 use quick_xml::DeError;
 use serde::Serialize;
+use serde::Serializer;
 
 use quick_xml::se::to_string;
 
@@ -16,16 +17,37 @@ struct Circuit {
     components: Vec<Component>,
 }
 
-#[derive(Serialize)]
 struct Coordinate {
     x: i32,
     y: i32,
 }
 
+impl Serialize for Coordinate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Create a string in the format "(x, y)"
+        let s = format!("({}, {})", self.x, self.y);
+        // Serialize the string as an attribute
+        serializer.serialize_str(&s)
+    }
+}
+
+impl fmt::Display for Coordinate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
 
 #[derive(Serialize)]
+#[serde(rename = "comp")]
 struct Component {
+    #[serde(rename = "@name")]
     name: String,
+
+    #[serde(rename = "@location")]
     location: Coordinate,
 }
 
