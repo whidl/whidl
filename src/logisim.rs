@@ -1,4 +1,6 @@
-use crate::simulator::Chip;
+use std::error::Error;
+
+use crate::{simulator::Chip, parser};
 use quick_xml::DeError;
 use serde::Serialize;
 
@@ -40,13 +42,38 @@ struct Wire {
     to: Coordinate,
 }
 
+// ========= CONVERSIONS ========== //
+impl From<&Chip> for Circuit {
+    fn from(chip: &Chip) -> Circuit {
+        let mut circuit = Circuit {
+            name: String::from("test"),
+            components: Vec::new(),
+        };
+
+        for c in &chip.components {
+            let logisim_component = Component::from(c);
+            circuit.components.push(logisim_component);
+        }
+
+        circuit
+    }
+}
+
+impl From<&parser::Component> for Component {
+    fn from(chip: &parser::Component) -> Component {
+        Component {
+            name: chip.name.value.clone(),
+            location: Coordinate {
+                x: 0,
+                y: 0,
+            },
+        }
+    }
+}
+
+
 pub fn export(chip: &Chip) -> Result<String, DeError> {
-    let c = Circuit {
-        name: String::from("test"),
-        components: Vec::new(),
-    };
-
-    let serialized = to_string(&c)?;
-
+    let circuit = Circuit::from(chip);
+    let serialized = to_string(&circuit)?;
     Ok(serialized)
 }
