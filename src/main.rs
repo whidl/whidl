@@ -12,6 +12,7 @@ mod test_scanner;
 mod test_script;
 mod vhdl;
 mod opt;
+mod logisim;
 
 use error::*;
 use modelsim::synth_vhdl_test;
@@ -68,6 +69,16 @@ enum Commands {
     Test {
         #[clap(short, long, action)]
         test_file: String,
+    },
+
+    Logisim {
+        /// Path to a top-level HDL file.
+        #[clap(index = 1)]
+        path: PathBuf,
+
+        /// The logisim .circ file to create.
+        #[clap(index = 2)]
+        output_dir: PathBuf,
     },
 }
 
@@ -180,6 +191,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Commands::Test { test_file } => {
             run_test(&PathBuf::from(test_file))?;
+        }
+        Commands::Logisim { path, output_dir } => {
+            todo!("Logisim support is not yet implemented.")
         }
     }
     Ok(())
