@@ -21,6 +21,7 @@ more-asserts = "0.3.0"
 wasm-bindgen = "0.2.82"
 rust-embed = "6.4.0"
 tempfile = "3.3.0"
+quick-xml = { version = "0.29.0", features = ["serialize"] }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

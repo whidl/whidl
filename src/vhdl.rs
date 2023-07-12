@@ -22,7 +22,7 @@ use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
 use crate::simulator::Chip;
-use crate::simulator::{infer_widths};
+use crate::simulator::infer_widths;
 use crate::Scanner;
 
 // ========= STRUCTS ========== //

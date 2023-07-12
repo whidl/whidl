@@ -71,14 +71,15 @@ enum Commands {
         test_file: String,
     },
 
+    /// Converts and HDL file to a Logisim circuit.
     Logisim {
         /// Path to a top-level HDL file.
         #[clap(index = 1)]
-        path: PathBuf,
+        input_path: PathBuf,
 
         /// The logisim .circ file to create.
         #[clap(index = 2)]
-        output_dir: PathBuf,
+        output_path: PathBuf,
     },
 }
 
@@ -192,8 +193,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Test { test_file } => {
             run_test(&PathBuf::from(test_file))?;
         }
-        Commands::Logisim { path, output_dir } => {
-            todo!("Logisim support is not yet implemented.")
+        Commands::Logisim { input_path, output_path } => {
+
+            let source_code = fs::read_to_string(input_path)?;
+            let mut scanner = Scanner::new(&source_code, PathBuf::from(&input_path));
+            let base_path = scanner.path.parent().unwrap();
+            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+            let mut parser = Parser::new(&mut scanner, provider.clone());
+            let hdl = parser.parse()?;
+            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())?;
+            let xml = logisim::export(&chip)?;
+            println!("{}", xml);
         }
     }
     Ok(())
