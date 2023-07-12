@@ -9,6 +9,7 @@ use quick_xml::se::to_string;
 
 #[derive(Serialize)]
 struct Circuit {
+    #[serde(rename = "@name")]
     name: String,
     components: Vec<Component>,
 }
