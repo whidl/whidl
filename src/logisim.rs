@@ -20,6 +20,7 @@ struct Project {
     lib: Vec<Library>,
     main: Main,
     options: Options,
+    mappings: Mappings,
     circuit: Circuit,
 }
 
@@ -37,9 +38,15 @@ struct Library {
 #[derive(Serialize)]
 #[serde(rename = "tool")]
 struct Tool {
+    #[serde(rename = "@lib")]
+    lib: Option<String>,
+    #[serde(rename = "@map")]
+    map: Option<String>,
     #[serde(rename = "@name")]
-    name: String,
-    a: Vec<Attribute>,
+    name: Option<String>,
+    #[serde(rename = "a")]
+    attributes: Vec<Attribute>,
+
 }
 
 #[derive(Serialize)]
@@ -137,8 +144,10 @@ impl From<&Chip> for Project {
             desc: Some(String::from("#Wiring")),
             name: String::from("0"),
             tools: vec![Tool {
-                name: String::from("Pin"),
-                a: vec![Attribute {
+                name: Some(String::from("Pin")),
+                lib: None,
+                map: None,
+                attributes: vec![Attribute {
                     name: String::from("appearance"),
                     val: String::from("classic"),
                 }],
@@ -236,9 +245,32 @@ impl From<&Chip> for Project {
             name: String::from("simrand"),
             val: String::from("0"),
         };
-        
+
         let options = Options {
-            attributes: vec![a_gate_undefined, a_sim_limit, a_sim_rand]
+            attributes: vec![a_gate_undefined, a_sim_limit, a_sim_rand],
+        };
+
+        let poke_map = Tool {
+            lib: Some("8".to_owned()),
+            map: Some("Button2".to_owned()),
+            name: Some("Poke Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+        let menu_map = Tool {
+            lib: Some("8".to_owned()),
+            map: Some("Button3".to_owned()),
+            name: Some("Menu Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+        let menu2_map = Tool {
+            lib: Some("8".to_owned()),
+            map: Some("Ctrl Button1".to_owned()),
+            name: Some("Menu Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+
+        let mappings = Mappings {
+            tools: vec![poke_map, menu_map, menu2_map]
         };
 
         Project {
@@ -248,6 +280,7 @@ impl From<&Chip> for Project {
             lib,
             main: Main { name: String::from("main") },
             options,
+            mappings,
         }
     }
 }
