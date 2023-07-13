@@ -19,6 +19,7 @@ struct Project {
     version: String,
     lib: Vec<Library>,
     main: Main,
+    options: Options,
     circuit: Circuit,
 }
 
@@ -56,6 +57,21 @@ struct Main {
     #[serde(rename = "@name")]
     name: String,
 }
+
+#[derive(Serialize)]
+#[serde(rename = "options")]
+struct Options {
+    #[serde(rename = "a")]
+    attributes: Vec<Attribute>,
+}
+
+#[derive(Serialize)]
+#[serde(rename = "mappings")]
+struct Mappings {
+    #[serde(rename = "tool")]
+    tools: Vec<Tool>,
+}
+
 
 #[derive(Serialize)]
 #[serde(rename = "circuit")]
@@ -208,12 +224,30 @@ impl From<&Chip> for Project {
             circuit.components.push(logisim_component);
         }
 
+        let a_gate_undefined = Attribute {
+            name: String::from("gateUndefined"),
+            val: String::from("ignore"),
+        };
+        let a_sim_limit = Attribute {
+            name: String::from("simlimit"),
+            val: String::from("1000"),
+        };
+        let a_sim_rand= Attribute {
+            name: String::from("simrand"),
+            val: String::from("0"),
+        };
+        
+        let options = Options {
+            attributes: vec![a_gate_undefined, a_sim_limit, a_sim_rand]
+        };
+
         Project {
             source: String::from("3.8.0"),
             version: String::from("1.0"),
             circuit,
             lib,
             main: Main { name: String::from("main") },
+            options,
         }
     }
 }
