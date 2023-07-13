@@ -1,11 +1,12 @@
-use std::fmt;
-
 use crate::{simulator::Chip, parser};
+
 use quick_xml::DeError;
 use serde::Serialize;
 use serde::Serializer;
-
 use quick_xml::se::to_string;
+
+use std::fmt;
+use rand::Rng;
 
 
 // ========= STRUCTS ========== //
@@ -18,8 +19,8 @@ struct Circuit {
 }
 
 struct Coordinate {
-    x: i32,
-    y: i32,
+    x: u16,
+    y: u16,
 }
 
 impl Serialize for Coordinate {
@@ -83,12 +84,14 @@ impl From<&Chip> for Circuit {
 
 impl From<&parser::Component> for Component {
     fn from(chip: &parser::Component) -> Component {
+        let mut rng = rand::thread_rng();
+
+        let x : u16 = rng.gen_range(0..1000);
+        let y : u16 = rng.gen_range(0..1000);
+
         Component {
             name: chip.name.value.clone(),
-            location: Coordinate {
-                x: 0,
-                y: 0,
-            },
+            location: Coordinate { x, y }
         }
     }
 }
