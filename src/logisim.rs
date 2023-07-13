@@ -18,6 +18,7 @@ struct Project {
     #[serde(rename = "@version")]
     version: String,
     lib: Vec<Library>,
+    main: Main,
     circuit: Circuit,
 }
 
@@ -47,6 +48,13 @@ struct Attribute {
     name: String,
     #[serde(rename = "@val")]
     val: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename = "main")]
+struct Main {
+    #[serde(rename = "@name")]
+    name: String,
 }
 
 #[derive(Serialize)]
@@ -175,7 +183,6 @@ impl From<&Chip> for Project {
             tools: Vec::new(),
             desc: None,
         };
-
         let lib = vec![
             lib_0_wiring,
             lib_1_gates,
@@ -206,6 +213,7 @@ impl From<&Chip> for Project {
             version: String::from("1.0"),
             circuit,
             lib,
+            main: Main { name: String::from("main") },
         }
     }
 }
