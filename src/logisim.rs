@@ -12,6 +12,17 @@ use rand::Rng;
 // ========= STRUCTS ========== //
 
 #[derive(Serialize)]
+#[serde(rename = "project")]
+struct Project {
+    #[serde(rename = "@source")]
+    source: String,
+    #[serde(rename = "@version")]
+    version: String,
+    circuit: Circuit,
+}
+
+#[derive(Serialize)]
+#[serde(rename = "circuit")]
 struct Circuit {
     #[serde(rename = "@name")]
     name: String,
@@ -66,8 +77,9 @@ struct Wire {
 }
 
 // ========= CONVERSIONS ========== //
-impl From<&Chip> for Circuit {
-    fn from(chip: &Chip) -> Circuit {
+impl From<&Chip> for Project {
+    fn from(chip: &Chip) -> Project {
+
         let mut circuit = Circuit {
             name: chip.name.clone(),
             components: Vec::new(),
@@ -78,7 +90,11 @@ impl From<&Chip> for Circuit {
             circuit.components.push(logisim_component);
         }
 
-        circuit
+        Project {
+            source: String::from("3.8.0"),
+            version: String::from("1.0"),
+            circuit,
+        }
     }
 }
 
@@ -98,7 +114,7 @@ impl From<&parser::Component> for Component {
 
 
 pub fn export(chip: &Chip) -> Result<String, DeError> {
-    let circuit = Circuit::from(chip);
-    let serialized = to_string(&circuit)?;
+    let project = Project::from(chip);
+    let serialized = to_string(&project)?;
     Ok(serialized)
 }
