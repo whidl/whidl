@@ -69,7 +69,7 @@ struct Wire {
 impl From<&Chip> for Circuit {
     fn from(chip: &Chip) -> Circuit {
         let mut circuit = Circuit {
-            name: String::from("test"),
+            name: chip.name.clone(),
             components: Vec::new(),
         };
 
