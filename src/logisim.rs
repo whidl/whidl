@@ -1,13 +1,12 @@
-use crate::{simulator::Chip, parser};
+use crate::{parser, simulator::Chip};
 
+use quick_xml::se::to_string;
 use quick_xml::DeError;
 use serde::Serialize;
 use serde::Serializer;
-use quick_xml::se::to_string;
 
-use std::fmt;
 use rand::Rng;
-
+use std::fmt;
 
 // ========= STRUCTS ========== //
 
@@ -52,7 +51,6 @@ impl fmt::Display for Coordinate {
     }
 }
 
-
 #[derive(Serialize)]
 #[serde(rename = "comp")]
 struct Component {
@@ -63,9 +61,7 @@ struct Component {
     location: Coordinate,
 }
 
-struct PinDirection {
-
-}
+struct PinDirection {}
 
 struct Pin {
     direction: PinDirection,
@@ -79,7 +75,6 @@ struct Wire {
 // ========= CONVERSIONS ========== //
 impl From<&Chip> for Project {
     fn from(chip: &Chip) -> Project {
-
         let mut circuit = Circuit {
             name: chip.name.clone(),
             components: Vec::new(),
@@ -102,19 +97,22 @@ impl From<&parser::Component> for Component {
     fn from(chip: &parser::Component) -> Component {
         let mut rng = rand::thread_rng();
 
-        let x : u16 = rng.gen_range(0..1000);
-        let y : u16 = rng.gen_range(0..1000);
+        let x: u16 = rng.gen_range(0..1000);
+        let y: u16 = rng.gen_range(0..1000);
 
         Component {
             name: chip.name.value.clone(),
-            location: Coordinate { x, y }
+            location: Coordinate { x, y },
         }
     }
 }
 
-
 pub fn export(chip: &Chip) -> Result<String, DeError> {
     let project = Project::from(chip);
     let serialized = to_string(&project)?;
-    Ok(serialized)
+    let serialized_with_decl = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n{}",
+        serialized
+    );
+    Ok(serialized_with_decl)
 }
