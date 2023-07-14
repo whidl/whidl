@@ -99,6 +99,8 @@ struct Toolbar {
 struct Circuit {
     #[serde(rename = "@name")]
     name: String,
+    #[serde(rename = "a")]
+    attributes: Vec<Attribute>,
     components: Vec<Component>,
 }
 
@@ -237,9 +239,22 @@ impl From<&Chip> for Project {
             lib_11_soc,
         ];
 
+        let circuit_appearance = Attribute {
+            name: String::from("appearance"),
+            val: String::from("NewPins"),
+        };
+        let circuit_facing = Attribute {
+            name: String::from("facing"),
+            val: String::from("west"),
+        };
+        let circuit_output = Attribute {
+            name: String::from("output"),
+            val: String::from("true"),
+        };
         let mut circuit = Circuit {
             name: chip.name.clone(),
             components: Vec::new(),
+            attributes: vec![circuit_appearance, circuit_facing, circuit_output]
         };
 
         for c in &chip.components {
