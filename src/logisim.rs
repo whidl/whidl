@@ -11,6 +11,14 @@ use std::fmt;
 // ========= STRUCTS ========== //
 
 #[derive(Serialize)]
+enum ToolbarItem {
+    #[serde(rename = "sep")]
+    Separator,
+    #[serde(rename = "tool")]
+    Tool(Tool),
+}
+
+#[derive(Serialize)]
 #[serde(rename = "project")]
 struct Project {
     #[serde(rename = "@source")]
@@ -21,6 +29,7 @@ struct Project {
     main: Main,
     options: Options,
     mappings: Mappings,
+    toolbar: Toolbar,
     circuit: Circuit,
 }
 
@@ -46,7 +55,6 @@ struct Tool {
     name: Option<String>,
     #[serde(rename = "a")]
     attributes: Vec<Attribute>,
-
 }
 
 #[derive(Serialize)]
@@ -79,6 +87,12 @@ struct Mappings {
     tools: Vec<Tool>,
 }
 
+#[derive(Serialize)]
+#[serde(rename = "toolbar")]
+struct Toolbar {
+    #[serde(rename = "tool")]
+    items: Vec<ToolbarItem>,
+}
 
 #[derive(Serialize)]
 #[serde(rename = "circuit")]
@@ -241,7 +255,7 @@ impl From<&Chip> for Project {
             name: String::from("simlimit"),
             val: String::from("1000"),
         };
-        let a_sim_rand= Attribute {
+        let a_sim_rand = Attribute {
             name: String::from("simrand"),
             val: String::from("0"),
         };
@@ -270,7 +284,126 @@ impl From<&Chip> for Project {
         };
 
         let mappings = Mappings {
-            tools: vec![poke_map, menu_map, menu2_map]
+            tools: vec![poke_map, menu_map, menu2_map],
+        };
+
+        let poke_toolbar = Tool {
+            lib: Some("8".to_owned()),
+            map: None,
+            name: Some("Poke Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+        let edit_toolbar = Tool {
+            lib: Some("8".to_owned()),
+            map: None,
+            name: Some("Edit Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+        let wiring_toolbar = Tool {
+            lib: Some("8".to_owned()),
+            map: None,
+            name: Some("Wiring Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+        let text_toolbar = Tool {
+            lib: Some("8".to_owned()),
+            map: None,
+            name: Some("Text Tool".to_owned()),
+            attributes: Vec::new(),
+        };
+
+        let pin1_toolbar = Tool {
+            lib: Some("0".to_owned()),
+            map: None,
+            name: Some("Pin".to_owned()),
+            attributes: Vec::new(),
+        };
+        let pin2_toolbar = Tool {
+            lib: Some("0".to_owned()),
+            map: None,
+            name: Some("Pin".to_owned()),
+            attributes: vec![
+                Attribute {
+                    name: "facing".to_owned(),
+                    val: "west".to_owned(),
+                },
+                Attribute {
+                    name: "output".to_owned(),
+                    val: "true".to_owned(),
+                },
+            ],
+        };
+
+        let not_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("NOT Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let and_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("AND Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let or_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("OR Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let xor_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("XOR Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let nand_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("NAND Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let nor_toolbar = Tool {
+            lib: Some("1".to_owned()),
+            map: None,
+            name: Some("NOR Gate".to_owned()),
+            attributes: Vec::new(),
+        };
+        let dff_toolbar = Tool {
+            lib: Some("4".to_owned()),
+            map: None,
+            name: Some("D Flip-Flop".to_owned()),
+            attributes: Vec::new(),
+        };
+        let reg_toolbar = Tool {
+            lib: Some("4".to_owned()),
+            map: None,
+            name: Some("Register".to_owned()),
+            attributes: Vec::new(),
+        };
+        let toolbar_items = vec![
+            ToolbarItem::Tool(poke_toolbar),
+            ToolbarItem::Tool(edit_toolbar),
+            ToolbarItem::Tool(wiring_toolbar),
+            ToolbarItem::Tool(text_toolbar),
+            ToolbarItem::Separator,
+            ToolbarItem::Tool(pin1_toolbar),
+            ToolbarItem::Tool(pin2_toolbar),
+            ToolbarItem::Separator,
+            ToolbarItem::Tool(not_toolbar),
+            ToolbarItem::Tool(and_toolbar),
+            ToolbarItem::Tool(or_toolbar),
+            ToolbarItem::Tool(xor_toolbar),
+            ToolbarItem::Tool(nand_toolbar),
+            ToolbarItem::Tool(nor_toolbar),
+            ToolbarItem::Separator,
+            ToolbarItem::Tool(dff_toolbar),
+            ToolbarItem::Tool(reg_toolbar),
+        ];
+
+        let toolbar = Toolbar {
+            items: toolbar_items,
         };
 
         Project {
@@ -278,9 +411,12 @@ impl From<&Chip> for Project {
             version: String::from("1.0"),
             circuit,
             lib,
-            main: Main { name: String::from("main") },
+            main: Main {
+                name: String::from("main"),
+            },
             options,
             mappings,
+            toolbar,
         }
     }
 }
