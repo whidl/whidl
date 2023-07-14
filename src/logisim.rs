@@ -151,11 +151,6 @@ struct Wire {
 // ========= CONVERSIONS ========== //
 impl From<&Chip> for Project {
     fn from(chip: &Chip) -> Project {
-        // <lib desc="#Wiring" name="0">
-        //     <tool name="Pin">
-        //     <a name="appearance" val="classic"/>
-        //     </tool>
-        // </lib>
         let lib_0_wiring = Library {
             desc: Some(String::from("#Wiring")),
             name: String::from("0"),
@@ -172,57 +167,57 @@ impl From<&Chip> for Project {
         let lib_1_gates = Library {
             name: String::from("1"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Gates".to_owned()),
         };
         let lib_2_plexers = Library {
             name: String::from("2"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Plexers".to_owned()),
         };
         let lib_3_arithmetic = Library {
             name: String::from("3"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Arithmetic".to_owned()),
         };
         let lib_4_memory = Library {
             name: String::from("4"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Memory".to_owned()),
         };
         let lib_5_io = Library {
             name: String::from("5"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#I/O".to_owned()),
         };
         let lib_6_ttl = Library {
             name: String::from("6"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#TTL".to_owned()),
         };
         let lib_7_tcl = Library {
             name: String::from("7"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#TCL".to_owned()),
         };
         let lib_8_base = Library {
             name: String::from("8"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Base".to_owned()),
         };
         let lib_9_bfh = Library {
             name: String::from("9"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#BFH-Praktika".to_owned()),
         };
         let lib_10_ioextra = Library {
             name: String::from("10"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Input/Output-Extra".to_owned()),
         };
         let lib_11_soc = Library {
             name: String::from("11"),
             tools: Vec::new(),
-            desc: None,
+            desc: Some("#Soc".to_owned()),
         };
         let lib = vec![
             lib_0_wiring,
@@ -241,7 +236,7 @@ impl From<&Chip> for Project {
 
         let circuit_appearance = Attribute {
             name: String::from("appearance"),
-            val: String::from("NewPins"),
+            val: String::from("logisim_evolution"),
         };
         let circuit_facing = Attribute {
             name: String::from("facing"),
