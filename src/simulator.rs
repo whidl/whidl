@@ -85,7 +85,7 @@ impl Simulator {
         self.dirty_dffs.clear();
         let mut parents = Vec::new();
         for dff_ref in dffs_this_tick {
-            let mut dff = unsafe { dff_ref.as_mut().unwrap() };
+            let dff = unsafe { dff_ref.as_mut().unwrap() };
 
             dff.signals.insert_option(
                 &Bus {
