@@ -148,6 +148,30 @@ struct Wire {
     to: Coordinate,
 }
 
+fn create_library(name: &str, desc: &str) -> Library {
+    Library {
+        name: name.to_owned(),
+        tools: Vec::new(),
+        desc: Some(desc.to_owned()),
+    }
+}
+
+fn create_attribute(name: &str, val: &str) -> Attribute {
+    Attribute {
+        name: name.to_owned(),
+        val: val.to_owned(),
+    }
+}
+
+fn create_tool(name: &str, lib: &str, map: Option<String>) -> Tool {
+    Tool {
+        name: Some(name.to_owned()),
+        lib: Some(lib.to_owned()),
+        map: map.to_owned(),
+        attributes: Vec::new(),
+    }
+}
+
 // ========= CONVERSIONS ========== //
 impl From<&Chip> for Project {
     fn from(chip: &Chip) -> Project {
@@ -164,61 +188,19 @@ impl From<&Chip> for Project {
                 }],
             }],
         };
-        let lib_1_gates = Library {
-            name: String::from("1"),
-            tools: Vec::new(),
-            desc: Some("#Gates".to_owned()),
-        };
-        let lib_2_plexers = Library {
-            name: String::from("2"),
-            tools: Vec::new(),
-            desc: Some("#Plexers".to_owned()),
-        };
-        let lib_3_arithmetic = Library {
-            name: String::from("3"),
-            tools: Vec::new(),
-            desc: Some("#Arithmetic".to_owned()),
-        };
-        let lib_4_memory = Library {
-            name: String::from("4"),
-            tools: Vec::new(),
-            desc: Some("#Memory".to_owned()),
-        };
-        let lib_5_io = Library {
-            name: String::from("5"),
-            tools: Vec::new(),
-            desc: Some("#I/O".to_owned()),
-        };
-        let lib_6_ttl = Library {
-            name: String::from("6"),
-            tools: Vec::new(),
-            desc: Some("#TTL".to_owned()),
-        };
-        let lib_7_tcl = Library {
-            name: String::from("7"),
-            tools: Vec::new(),
-            desc: Some("#TCL".to_owned()),
-        };
-        let lib_8_base = Library {
-            name: String::from("8"),
-            tools: Vec::new(),
-            desc: Some("#Base".to_owned()),
-        };
-        let lib_9_bfh = Library {
-            name: String::from("9"),
-            tools: Vec::new(),
-            desc: Some("#BFH-Praktika".to_owned()),
-        };
-        let lib_10_ioextra = Library {
-            name: String::from("10"),
-            tools: Vec::new(),
-            desc: Some("#Input/Output-Extra".to_owned()),
-        };
-        let lib_11_soc = Library {
-            name: String::from("11"),
-            tools: Vec::new(),
-            desc: Some("#Soc".to_owned()),
-        };
+
+        let lib_1_gates = create_library("1", "#Gates");
+        let lib_2_plexers = create_library("2", "#Plexers");
+        let lib_3_arithmetic = create_library("3", "#Arithmetic");
+        let lib_4_memory = create_library("4", "#Memory");
+        let lib_5_io = create_library("5", "#I/O");
+        let lib_6_ttl = create_library("6", "#TTL");
+        let lib_7_tcl = create_library("7", "#TCL");
+        let lib_8_base = create_library("8", "#Base");
+        let lib_9_bfh = create_library("9", "#BFH-Praktika");
+        let lib_10_ioextra = create_library("10", "#Input/Output-Extra");
+        let lib_11_soc = create_library("11", "#Soc");
+
         let lib = vec![
             lib_0_wiring,
             lib_1_gates,
@@ -234,22 +216,14 @@ impl From<&Chip> for Project {
             lib_11_soc,
         ];
 
-        let circuit_appearance = Attribute {
-            name: String::from("appearance"),
-            val: String::from("logisim_evolution"),
-        };
-        let circuit_facing = Attribute {
-            name: String::from("facing"),
-            val: String::from("west"),
-        };
-        let circuit_output = Attribute {
-            name: String::from("output"),
-            val: String::from("true"),
-        };
+        let circuit_appearance = create_attribute("appearance", "logisim_evolution");
+        let circuit_facing = create_attribute("facing", "west");
+        let circuit_output = create_attribute("output", "true");
+
         let mut circuit = Circuit {
             name: chip.name.clone(),
             components: Vec::new(),
-            attributes: vec![circuit_appearance, circuit_facing, circuit_output]
+            attributes: vec![circuit_appearance, circuit_facing, circuit_output],
         };
 
         for c in &chip.components {
@@ -257,77 +231,28 @@ impl From<&Chip> for Project {
             circuit.components.push(logisim_component);
         }
 
-        let a_gate_undefined = Attribute {
-            name: String::from("gateUndefined"),
-            val: String::from("ignore"),
-        };
-        let a_sim_limit = Attribute {
-            name: String::from("simlimit"),
-            val: String::from("1000"),
-        };
-        let a_sim_rand = Attribute {
-            name: String::from("simrand"),
-            val: String::from("0"),
-        };
+        let a_gate_undefined = create_attribute("gateUndefined", "ignore");
+        let a_sim_limit = create_attribute("simlimit", "1000");
+        let a_sim_rand = create_attribute("simrand", "0");
 
         let options = Options {
             attributes: vec![a_gate_undefined, a_sim_limit, a_sim_rand],
         };
 
-        let poke_map = Tool {
-            lib: Some("8".to_owned()),
-            map: Some("Button2".to_owned()),
-            name: Some("Poke Tool".to_owned()),
-            attributes: Vec::new(),
-        };
-        let menu_map = Tool {
-            lib: Some("8".to_owned()),
-            map: Some("Button3".to_owned()),
-            name: Some("Menu Tool".to_owned()),
-            attributes: Vec::new(),
-        };
-        let menu2_map = Tool {
-            lib: Some("8".to_owned()),
-            map: Some("Ctrl Button1".to_owned()),
-            name: Some("Menu Tool".to_owned()),
-            attributes: Vec::new(),
-        };
+        let poke_map = create_tool("Poke Tool", "8", Some("Button2".to_owned()));
+        let menu_map = create_tool("Menu Tool", "8", Some("Button3".to_owned()));
+        let menu2_map = create_tool("Menu Tool", "8", Some("Ctrl Button1".to_owned()));
 
         let mappings = Mappings {
             tools: vec![poke_map, menu_map, menu2_map],
         };
 
-        let poke_toolbar = Tool {
-            lib: Some("8".to_owned()),
-            map: None,
-            name: Some("Poke Tool".to_owned()),
-            attributes: Vec::new(),
-        };
-        let edit_toolbar = Tool {
-            lib: Some("8".to_owned()),
-            map: None,
-            name: Some("Edit Tool".to_owned()),
-            attributes: Vec::new(),
-        };
-        let wiring_toolbar = Tool {
-            lib: Some("8".to_owned()),
-            map: None,
-            name: Some("Wiring Tool".to_owned()),
-            attributes: Vec::new(),
-        };
-        let text_toolbar = Tool {
-            lib: Some("8".to_owned()),
-            map: None,
-            name: Some("Text Tool".to_owned()),
-            attributes: Vec::new(),
-        };
+        let poke_toolbar = create_tool("Poke Tool", "8", Some("Button2".to_owned()));
+        let edit_toolbar = create_tool("Edit Tool", "8", Some("Button1".to_owned()));
+        let wiring_toolbar = create_tool("Wiring Tool", "8", Some("Button3".to_owned()));
+        let text_toolbar = create_tool("Text Tool", "8", Some("Ctrl Button1".to_owned()));
+        let pin1_toolbar = create_tool("Pin", "0", None);
 
-        let pin1_toolbar = Tool {
-            lib: Some("0".to_owned()),
-            map: None,
-            name: Some("Pin".to_owned()),
-            attributes: Vec::new(),
-        };
         let pin2_toolbar = Tool {
             lib: Some("0".to_owned()),
             map: None,
@@ -344,54 +269,15 @@ impl From<&Chip> for Project {
             ],
         };
 
-        let not_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("NOT Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let and_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("AND Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let or_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("OR Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let xor_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("XOR Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let nand_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("NAND Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let nor_toolbar = Tool {
-            lib: Some("1".to_owned()),
-            map: None,
-            name: Some("NOR Gate".to_owned()),
-            attributes: Vec::new(),
-        };
-        let dff_toolbar = Tool {
-            lib: Some("4".to_owned()),
-            map: None,
-            name: Some("D Flip-Flop".to_owned()),
-            attributes: Vec::new(),
-        };
-        let reg_toolbar = Tool {
-            lib: Some("4".to_owned()),
-            map: None,
-            name: Some("Register".to_owned()),
-            attributes: Vec::new(),
-        };
+        let not_toolbar = create_tool("NOT Gate", "1", None);
+        let and_toolbar = create_tool("AND Gate", "1", None);
+        let or_toolbar = create_tool("OR Gate", "1", None);
+        let xor_toolbar = create_tool("XOR Gate", "1", None);
+        let nand_toolbar = create_tool("NAND Gate", "1", None);
+        let nor_toolbar = create_tool("NOR Gate", "1", None);
+        let dff_toolbar = create_tool("D Flip-Flop", "4", None);
+        let reg_toolbar = create_tool("Register", "4", None);
+
         let toolbar_items = vec![
             ToolbarItem::Tool(poke_toolbar),
             ToolbarItem::Tool(edit_toolbar),
