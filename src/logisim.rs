@@ -1,3 +1,4 @@
+use crate::simulator::Port;
 use crate::{parser, simulator::Chip};
 
 use quick_xml::se::to_string;
@@ -235,7 +236,12 @@ impl From<&Chip> for Project {
         for c in &chip.components {
             let logisim_component = Component::from(c);
             circuit.components.push(logisim_component);
-            println!("component");
+        }
+
+        // Ports become logisim pins, which are components in Logisim.
+        for (_, p) in &chip.ports {
+            let logisim_component = Component::from(p);
+            circuit.components.push(logisim_component);
         }
 
         let a_gate_undefined = create_attribute("gateUndefined", "ignore");
@@ -324,6 +330,45 @@ impl From<&Chip> for Project {
     }
 }
 
+impl From<&Port> for Component {
+    fn from(port: &Port) -> Self {
+        // Create random coordinates for the port
+        let mut rng = rand::thread_rng();
+        let x: u16 = rng.gen_range(0..1000);
+        let y: u16 = rng.gen_range(0..1000);
+
+        let facing = match port.direction {
+            parser::PortDirection::In => "west",
+            parser::PortDirection::Out => "east",
+        };
+
+        let output = match port.direction {
+            parser::PortDirection::In => "false",
+            parser::PortDirection::Out => "true",
+        };
+
+        Component {
+            lib: "0".to_owned(),
+            name: "Pin".to_owned(),
+            location: Coordinate { x, y },
+            attributes: vec![
+                Attribute {
+                    name: "facing".to_owned(),
+                    val: facing.to_owned(),
+                },
+                Attribute {
+                    name: "output".to_owned(),
+                    val: output.to_owned(),
+                },
+                Attribute {
+                    name: "appearance".to_owned(),
+                    val: "NewPins".to_owned(),
+                }
+            ],
+        }
+    }
+}
+
 impl From<&parser::Component> for Component {
     fn from(component: &parser::Component) -> Self {
         let mut rng = rand::thread_rng();
@@ -331,11 +376,8 @@ impl From<&parser::Component> for Component {
         let x: u16 = rng.gen_range(0..1000);
         let y: u16 = rng.gen_range(0..1000);
 
-        let lib = if component.name.value == "Pin" {
-            "0"
-        } else {
-            "1" // default to library 1, adjust as needed
-        };
+        // All components are in library 1.
+        let lib = "1";
 
         let mut rename_map: HashMap<String, String> = HashMap::new();
         rename_map.insert("nand".to_string(), "NAND Gate".to_string());
