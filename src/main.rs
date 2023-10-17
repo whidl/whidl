@@ -203,7 +203,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let hdl = parser.parse()?;
             let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())?;
             let xml = logisim::export(&chip)?;
-            println!("{}", xml);
+            fs::write(output_path, xml)?;
         }
     }
     Ok(())
