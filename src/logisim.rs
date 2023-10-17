@@ -130,11 +130,15 @@ impl fmt::Display for Coordinate {
 #[derive(Serialize)]
 #[serde(rename = "comp")]
 struct Component {
+    #[serde(rename = "@lib")]
+    lib: String,
     #[serde(rename = "@name")]
     name: String,
-
-    #[serde(rename = "@location")]
+    #[serde(rename = "@loc")]
     location: Coordinate,
+    // Add a Vector field to store Attributes
+    #[serde(rename = "a", skip_serializing_if = "Vec::is_empty")]
+    attributes: Vec<Attribute>,
 }
 
 struct PinDirection {}
@@ -229,6 +233,7 @@ impl From<&Chip> for Project {
         for c in &chip.components {
             let logisim_component = Component::from(c);
             circuit.components.push(logisim_component);
+            println!("component");
         }
 
         let a_gate_undefined = create_attribute("gateUndefined", "ignore");
@@ -318,15 +323,23 @@ impl From<&Chip> for Project {
 }
 
 impl From<&parser::Component> for Component {
-    fn from(chip: &parser::Component) -> Component {
+    fn from(component: &parser::Component) -> Self {
         let mut rng = rand::thread_rng();
 
         let x: u16 = rng.gen_range(0..1000);
         let y: u16 = rng.gen_range(0..1000);
 
+        let lib = if component.name.value == "Pin" {
+            "0"
+        } else {
+            "1" // default to library 1, adjust as needed
+        };
+
         Component {
-            name: chip.name.value.clone(),
+            lib: lib.to_owned(),
+            name: component.name.value.clone(),
             location: Coordinate { x, y },
+            attributes: vec![], // Initialize empty attribute vector
         }
     }
 }
@@ -339,4 +352,28 @@ pub fn export(chip: &Chip) -> Result<String, DeError> {
         serialized
     );
     Ok(serialized_with_decl)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_component_serialization() {
+        let mut rng = rand::thread_rng();
+        let x: u16 = rng.gen_range(0..1000);
+        let y: u16 = rng.gen_range(0..1000);
+        let component = Component {
+            lib: String::from("1"), // test with library 1
+            name: String::from("test_component"),
+            location: Coordinate { x, y },
+            attributes: vec![], // Initialize with no attributes
+        };
+
+        let serialized_component = to_string(&component).unwrap();
+        
+        // Verify serialization result, you may need to change this based on the expected XML result
+        let expected_serialization = format!("<comp lib=\"{}\" name=\"{}\" loc=\"({}, {})\"/>", "1", "test_component", x, y);
+        assert_eq!(serialized_component, expected_serialization);
+    }
 }
