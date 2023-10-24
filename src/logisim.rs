@@ -239,10 +239,10 @@ impl From<&Chip> for Project {
         }
 
         // Ports become logisim pins, which are components in Logisim.
-        for (_, p) in &chip.ports {
+        chip.ports.iter().for_each(|(_, p)| {
             let logisim_component = Component::from(p);
             circuit.components.push(logisim_component);
-        }
+        });
 
         let a_gate_undefined = create_attribute("gateUndefined", "ignore");
         let a_sim_limit = create_attribute("simlimit", "1000");
@@ -363,7 +363,7 @@ impl From<&Port> for Component {
                 Attribute {
                     name: "appearance".to_owned(),
                     val: "NewPins".to_owned(),
-                }
+                },
             ],
         }
     }
@@ -434,39 +434,35 @@ mod tests {
         assert_eq!(serialized_component, expected_serialization);
     }
 
-    #[cfg(test)]
-    mod tests {
-        // Import required elements here from your main code, adjust as needed
-        use super::*;
-        use quick_xml::se::to_string;
-        use std::{fs, path::PathBuf, ptr, rc::Rc};
+    // Import required elements here from your main code, adjust as needed
+    use quick_xml::se::to_string;
+    use std::{fs, path::PathBuf, ptr, rc::Rc};
 
-        use crate::parser::{FileReader, HdlProvider, Parser};
+    use crate::parser::{FileReader, HdlProvider, Parser};
 
-        #[test]
-        fn test_chip_conversion_contains_comp() {
-            // Read a chip file, parse it and create a Chip structure
-            let source_code = fs::read_to_string("resources/tests/nand2tetris/solutions/Not.hdl")
-                .expect("unable to read chip file");
-            let mut scanner = Scanner::new(&source_code, PathBuf::from("path/to/your/chip/file"));
-            let base_path = scanner.path.parent().unwrap();
-            let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
-            let mut parser = Parser::new(&mut scanner, provider.clone());
-            let hdl = parser.parse().expect("Failed to parse HDL");
-            let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
-                .expect("Failed to create CHIP");
+    #[test]
+    fn test_chip_conversion_contains_comp() {
+        // Read a chip file, parse it and create a Chip structure
+        let source_code = fs::read_to_string("resources/tests/nand2tetris/solutions/Not.hdl")
+            .expect("unable to read chip file");
+        let mut scanner = Scanner::new(&source_code, PathBuf::from("path/to/your/chip/file"));
+        let base_path = scanner.path.parent().unwrap();
+        let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
+        let mut parser = Parser::new(&mut scanner, provider.clone());
+        let hdl = parser.parse().expect("Failed to parse HDL");
+        let chip = Chip::new(&hdl, ptr::null_mut(), &provider, true, &Vec::new())
+            .expect("Failed to create CHIP");
 
-            // Convert this chip to Project; this is the function you're testing
-            let project = Project::from(&chip);
+        // Convert this chip to Project; this is the function you're testing
+        let project = Project::from(&chip);
 
-            // Now, serialize this project
-            let serialized_project = to_string(&project).unwrap();
+        // Now, serialize this project
+        let serialized_project = to_string(&project).unwrap();
 
-            // Then we assert that '<comp' is found in the serialization
-            assert!(
-                serialized_project.contains("<comp "),
-                "The serialized xml does not contain '<comp'"
-            );
-        }
+        // Then we assert that '<comp' is found in the serialization
+        assert!(
+            serialized_project.contains("<comp "),
+            "The serialized xml does not contain '<comp'"
+        );
     }
 }
