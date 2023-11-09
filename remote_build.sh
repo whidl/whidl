@@ -7,8 +7,8 @@
 
 # Set the parameters
 ZIP_NAME="archive.zip"
-REMOTE_USERNAME="..."
-REMOTE_ADDRESS="..."
+REMOTE_USERNAME="defreezd"
+REMOTE_ADDRESS="149.165.154.78"
 REMOTE_PATH="quartus_build"
 CHIP_NAME=$1
 
@@ -40,8 +40,8 @@ ssh ${REMOTE_USERNAME}@${REMOTE_ADDRESS} <<EOF
   echo "Building the project..."
   whidl synth-vhdl ${CHIP_NAME}.hdl _build
   cd _build
-  quartus_sh -t project.tcl
-  quartus_sh --flow compile $CHIP_NAME
+  /opt/intelFPGA_lite/quartus/bin/quartus_sh -t project.tcl
+  /opt/intelFPGA_lite/quartus/bin/quartus_sh --flow compile $CHIP_NAME
 
 EOF
 
