@@ -7,8 +7,8 @@
 
 # Set the parameters
 ZIP_NAME="archive.zip"
-REMOTE_USERNAME="defreezd"
-REMOTE_ADDRESS="149.165.154.78"
+REMOTE_USERNAME="YOURUSERNAMEHERE"
+REMOTE_ADDRESS="jetstream.whidl.io"
 REMOTE_PATH="quartus_build"
 CHIP_NAME=$1
 
