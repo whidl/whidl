@@ -1,0 +1,7 @@
+CHIP ClockDivGen<N> {
+    IN;
+    OUT out;
+
+    PARTS:
+        AddGen<N>(a=a, b[0]=true, b[1..N-1]=false, out=a, out[N-1]=out);
+} 

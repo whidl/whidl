@@ -1,0 +1,16 @@
+/**
+ * Adds two N-bit values.
+ * The most significant carry bit is ignored.
+ */
+
+CHIP AddGen<N> {
+    IN a[N], b[N];
+    OUT out[N];
+
+    PARTS:
+    HalfAdder(a=a[0],   b=b[0],   sum=out[0], carry=c[0]);
+
+    FOR i IN 1 TO N-1 GENERATE {
+        FullAdder(a=a[i], b=b[i], c=c[i-1], sum=out[i], carry=c[i]);
+    }
+}

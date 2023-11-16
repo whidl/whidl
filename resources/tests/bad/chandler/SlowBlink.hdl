@@ -1,0 +1,10 @@
+CHIP SlowBlink {
+    IN;
+    OUT LEDR[10];
+
+    PARTS:
+    ClockDivGen<24>(out=LEDR[0]);
+    FOR i IN 1 TO 9 GENERATE{
+       Not(in=true, out=LEDR[i]);  
+    }
+}
