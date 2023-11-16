@@ -1003,8 +1003,11 @@ end architecture arch;
     // Seed the worklist with all components of the top-level entity.
     push_parts(&qp.chip_hdl.parts, &mut worklist, &mut done);
 
-    let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
+    // TODO: Instead of using the worklist we should just make one chip
+    // and then traverse the chip. We are reinventing the wheel here
+    // that is Simulator::elaborate
 
+    let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
     while !worklist.is_empty() {
         let next_chip_name = worklist.pop().unwrap();
         let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
