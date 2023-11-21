@@ -14,6 +14,7 @@ use crate::vhdl::write_quartus_project;
 use crate::vhdl::SignalRhs::*;
 use crate::vhdl::*;
 use crate::ChipHDL;
+use crate::PortMapDedupe;
 
 use std::cell::RefCell;
 use std::error::Error;
@@ -328,7 +329,19 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
     let provider: Rc<dyn HdlProvider> = Rc::new(FileReader::new(base_path));
     let mut parser = Parser::new(&mut scanner, provider.clone());
     let hdl = parser.parse()?;
-    let chip_vhdl = VhdlEntity::try_from(&hdl)?;
+
+    // Convert HDL to VHDL (VHDl synthesis).
+    let mut dedupe_pass = PortMapDedupe::new();
+    let (chip_hdl, _) = &dedupe_pass.apply(&hdl, &provider)?;
+
+    let chip = Chip::new(
+        chip_hdl,
+        ptr::null_mut(),
+        &chip_hdl.provider,
+        true,
+        &Vec::new(),
+    )?;
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(chip)?;
 
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());

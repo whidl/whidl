@@ -4,6 +4,7 @@ mod busmap;
 mod error;
 mod expr;
 mod modelsim;
+mod opt;
 mod parser;
 mod scanner;
 mod simulator;
@@ -11,7 +12,6 @@ mod test_parser;
 mod test_scanner;
 mod test_script;
 mod vhdl;
-mod opt;
 
 use error::*;
 use modelsim::synth_vhdl_test;
@@ -31,6 +31,8 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::vhdl::write_quartus_project;
+use crate::opt::portmap_dedupe::PortMapDedupe;
+use crate::opt::optimization::OptimizationPass;
 
 #[derive(ArgParser)]
 #[clap(version)]
@@ -82,7 +84,17 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
     let hdl = parser.parse()?;
 
     // Convert HDL to VHDL (VHDl synthesis).
-    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&hdl)?;
+    let mut dedupe_pass = PortMapDedupe::new();
+    let (chip_hdl, _) = &dedupe_pass.apply(&hdl, &provider)?;
+
+    let chip = Chip::new(
+        chip_hdl,
+        ptr::null_mut(),
+        &chip_hdl.provider,
+        true,
+        &Vec::new(),
+    )?;
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(chip)?;
 
     // Create a Quartus Prime project.
     let quartus_dir = Path::new(&output_dir);

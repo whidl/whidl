@@ -21,8 +21,8 @@ use crate::opt::optimization::OptimizationPass;
 use crate::opt::portmap_dedupe::PortMapDedupe;
 use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
+use crate::simulator::infer_widths;
 use crate::simulator::Chip;
-use crate::simulator::{infer_widths};
 use crate::Scanner;
 
 // ========= STRUCTS ========== //
@@ -266,14 +266,16 @@ impl fmt::Display for VhdlEntity {
                 Part::Component(component) => {
                     if seen.insert(&component.name.value) {
                         // If it's a Component, we generate its declaration
-                        let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                        let decl =
+                            self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
                         writeln!(f, "{}", decl)?;
                     }
                 }
                 Part::Loop(loop_hdl) => {
                     for component in &loop_hdl.body {
                         if seen.insert(&component.name.value) {
-                            let decl = self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                            let decl =
+                                self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
                             writeln!(f, "{}", decl)?;
                         }
                     }
@@ -336,7 +338,6 @@ impl VhdlEntity {
             .map(|port| VhdlPort::from(port).to_string())
             .collect();
         writeln!(decl, "{}", vhdl_ports.join(";\n"))?;
-
 
         writeln!(decl, ");")?;
         writeln!(decl, "end component {};", keyw(&dep.name.value))?;
@@ -462,26 +463,16 @@ impl std::fmt::Display for PortMappingVHDL {
 // ========= CONVERSIONS ========== //
 
 /// This is where VHDL is synthesized for an HDL chip.
-impl TryFrom<&ChipHDL> for VhdlEntity {
+impl TryFrom<Chip> for VhdlEntity {
     type Error = Box<dyn Error>;
 
-    fn try_from(raw_hdl: &ChipHDL) -> Result<Self, Box<dyn Error>> {
-        let mut dedupe_pass = PortMapDedupe::new();
-        let (chip_hdl, _) = &dedupe_pass.apply(raw_hdl, &raw_hdl.provider)?;
-
-        let chip = Chip::new(
-            chip_hdl,
-            ptr::null_mut(),
-            &chip_hdl.provider,
-            true,
-            &Vec::new(),
-        )?;
-
+    fn try_from(chip: Chip) -> Result<Self, Box<dyn Error>> {
         let mut vhdl_components: Vec<VhdlComponent> =
             chip.components.iter().map(VhdlComponent::from).collect();
 
         let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
+        let chip_hdl = chip.hdl.as_ref().unwrap();
 
         for port in &chip_hdl.ports {
             ports.push(VhdlPort::from(port));
@@ -1006,26 +997,26 @@ end architecture arch;
     // TODO: Instead of using the worklist we should just make one chip
     // and then traverse the chip. We are reinventing the wheel here
     // that is Simulator::elaborate
-
     let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
-    while !worklist.is_empty() {
-        let next_chip_name = worklist.pop().unwrap();
-        let next_hdl_path = base_path.join(next_chip_name.clone() + ".hdl");
 
-        let next_source_code = fs::read_to_string(&next_hdl_path)?;
-        let mut next_scanner = Scanner::new(&next_source_code, next_hdl_path.clone());
-        let mut next_parser = Parser::new(&mut next_scanner, qp.chip_hdl.provider.clone());
-        let next_hdl = next_parser.parse()?;
+    let mut dedupe_pass = PortMapDedupe::new();
+    let (chip_hdl, _) = &dedupe_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
+    let chip = Chip::new(
+        chip_hdl,
+        ptr::null_mut(),
+        &chip_hdl.provider,
+        true,
+        &Vec::new(),
+    )?;
 
-        // Convert HDL to VHDL (VHDl synthesis).
-        let next_vhdl: VhdlEntity = VhdlEntity::try_from(&next_hdl)?;
+    let top_level_vhdl = VhdlEntity::try_from(chip)?;
 
-        let next_filename = next_chip_name + ".vhdl";
-        let mut next_file = File::create(qp.project_dir.join(&next_filename))?;
-        next_file.write_all(format!("{}", next_vhdl).as_bytes())?;
+    // TODO: traverse the tree of chips and run VhdlEntity::try_from CHIP on
+    // the components, that way we have fully resolved generics. We will need
+    // to create a converter from a chip. STILL use a worklist but the worklist
+    // is over the chips tree
 
-        push_parts(&next_hdl.parts, &mut worklist, &mut done);
-    }
+    push_parts(&next_hdl.parts, &mut worklist, &mut done);
 
     Ok(())
 }
