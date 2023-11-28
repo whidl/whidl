@@ -75,6 +75,7 @@ enum Commands {
 
 // TODO: Remove duplication from this function.
 fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    println!("Synthesizing {} as a chip.", hdl_path.display());
     // Standard HDL parsing pipeline.
     let source_code = fs::read_to_string(hdl_path)?;
     let mut scanner = Scanner::new(&source_code, hdl_path.clone());
@@ -94,7 +95,8 @@ fn synth_vhdl_chip(output_dir: &PathBuf, hdl_path: &PathBuf) -> Result<(), Box<d
         true,
         &Vec::new(),
     )?;
-    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(chip)?;
+
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&chip)?;
 
     // Create a Quartus Prime project.
     let quartus_dir = Path::new(&output_dir);

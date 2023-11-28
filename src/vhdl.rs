@@ -33,8 +33,10 @@ pub struct VhdlEntity {
     pub signals: Vec<Signal>,       // Declared signals.
     pub statements: Vec<Statement>, // VHDL statements.
     pub optimization_info: Option<Rc<RefCell<OptimizationInfo>>>,
-    pub chip: Chip,
+    pub chip_hdl: ChipHDL,
+    pub hdl_provider: Rc<dyn HdlProvider>,
 }
+
 impl Hash for VhdlEntity {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
@@ -261,13 +263,12 @@ impl fmt::Display for VhdlEntity {
 
         // We need to iterate over HDL parts in order to generate declarations for them.
         let mut seen = HashSet::new();
-        for part in &self.chip.hdl.as_ref().unwrap().parts {
+        for part in &self.chip_hdl.parts {
             match part {
                 Part::Component(component) => {
                     if seen.insert(&component.name.value) {
                         // If it's a Component, we generate its declaration
-                        let decl =
-                            self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                        let decl = self.declaration(component, Rc::clone(&self.hdl_provider))?;
                         writeln!(f, "{}", decl)?;
                     }
                 }
@@ -275,7 +276,7 @@ impl fmt::Display for VhdlEntity {
                     for component in &loop_hdl.body {
                         if seen.insert(&component.name.value) {
                             let decl =
-                                self.declaration(component, Rc::clone(&self.chip.hdl_provider))?;
+                                self.declaration(component, Rc::clone(&self.hdl_provider))?;
                             writeln!(f, "{}", decl)?;
                         }
                     }
@@ -463,14 +464,13 @@ impl std::fmt::Display for PortMappingVHDL {
 // ========= CONVERSIONS ========== //
 
 /// This is where VHDL is synthesized for an HDL chip.
-impl TryFrom<Chip> for VhdlEntity {
+impl TryFrom<&Chip> for VhdlEntity {
     type Error = Box<dyn Error>;
 
-    fn try_from(chip: Chip) -> Result<Self, Box<dyn Error>> {
+    fn try_from(chip: &Chip) -> Result<Self, Box<dyn Error>> {
         let mut vhdl_components: Vec<VhdlComponent> =
             chip.components.iter().map(VhdlComponent::from).collect();
 
-        let generics: Vec<String> = Vec::new();
         let mut ports: Vec<VhdlPort> = Vec::new();
         let chip_hdl = chip.hdl.as_ref().unwrap();
 
@@ -497,12 +497,22 @@ impl TryFrom<Chip> for VhdlEntity {
             }
         }
 
+        let mut generic_params = Vec::new();
+        let mut generic_decls = Vec::new();
+        for decl in &chip.hdl.as_ref().unwrap().generic_decls {
+            let param = chip.variables.get(&decl.value).unwrap();
+            generic_params.push(GenericWidth::Terminal(Terminal::Num(*param)));
+            generic_decls.push(decl.value.clone());
+        }
+
+        // At this point we need to know the values of the generics.
+        // where this was instantiated.
         let inferred_widths = infer_widths(
             chip_hdl,
             &Vec::new(),
             &chip.components,
             &chip_hdl.provider,
-            &Vec::new(),
+            &generic_params,
         )?;
 
         let ports_ref = &ports;
@@ -556,12 +566,13 @@ impl TryFrom<Chip> for VhdlEntity {
 
         Ok(VhdlEntity {
             name: chip_hdl.name.clone(),
-            generics,
+            generics: generic_decls,
             ports,
             signals,
             statements,
             optimization_info: Some(Rc::clone(&sequential_pass_info)),
-            chip,
+            chip_hdl: chip_hdl.clone(),
+            hdl_provider: chip_hdl.provider.clone(),
         })
     }
 }
@@ -695,6 +706,7 @@ impl QuartusProject {
 }
 
 pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> {
+    println!("Writing Quartus Prime project to {}", qp.project_dir.display());
     let mut tcl = format!("project_new {} -overwrite", &qp.chip_vhdl.name);
 
     writeln!(
@@ -727,7 +739,20 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 
     // Read in templates/nand_template.vhdl to the string nand_vhdl.
     // This is the definition of the NAND gate.
-    let nand_vhdl = fs::read_to_string("templates/nand_template.vhdl")?;
+    let nand_vhdl = "
+    library ieee;
+    use ieee.std_logic_1164.all;
+    entity nand_n2v is
+    port (a : in std_logic_vector(0 downto 0);
+    b : in std_logic_vector(0 downto 0);
+    out_n2v : out std_logic_vector(0 downto 0)
+    );
+    end entity nand_n2v;
+    architecture arch of nand_n2v is
+    begin
+    out_n2v <= a nand b;
+    end architecture arch;
+    ";
 
     let mut file = File::create(qp.project_dir.join("Nand.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
@@ -779,8 +804,6 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
     let (_, sequential_pass_info_raw) =
         sequential_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
     let sequential_pass_info = Rc::new(RefCell::new(sequential_pass_info_raw));
-    
-    // TODO: Read in template files.
 
     if let OptimizationInfo::SequentialFlagMap(sequential_flag_map) =
         &*sequential_pass_info.borrow()
@@ -793,9 +816,20 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
     let mut file = File::create(qp.project_dir.join("Nand.vhdl"))?;
     file.write_all(nand_vhdl.as_bytes())?;
 
-    // Read in templates/dff_template.vhdl to the string dff_vhdl.
-    // This is the definition of the DFF.
-    let dff_vhdl = fs::read_to_string("templates/dff_template.vhdl")?;
+    let dff_vhdl = "
+    library ieee;
+    use ieee.std_logic_1164.all;
+    entity nand_n2v is
+    port (a : in std_logic_vector(0 downto 0);
+    b : in std_logic_vector(0 downto 0);
+    out_n2v : out std_logic_vector(0 downto 0)
+    );
+    end entity nand_n2v;
+    architecture arch of nand_n2v is
+    begin
+    out_n2v <= a nand b;
+    end architecture arch;
+    ";
 
     let mut file = File::create(qp.project_dir.join("DFF.vhdl"))?;
     file.write_all(dff_vhdl.as_bytes())?;
@@ -817,33 +851,7 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 
     // Recursively parse and write all dependency components.
     // Worklist is set of chip names that we need to convert from HDL to VHDL.
-    let mut worklist: Vec<String> = Vec::new();
-
-    // Pushes parts onto the worklist.
-    fn push_parts(parts: &Vec<Part>, worklist: &mut Vec<String>, done: &mut HashSet<String>) {
-        for part in parts {
-            match part {
-                Part::Component(c) => {
-                    if !done.contains(&c.name.value) {
-                        done.insert(c.name.value.clone());
-                        worklist.push(c.name.value.clone());
-                    }
-                }
-                Part::Loop(l) => {
-                    for c in &l.body {
-                        if !done.contains(&c.name.value) {
-                            done.insert(c.name.value.clone());
-                            worklist.push(c.name.value.clone());
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // Seed the worklist with all components of the top-level entity.
-    push_parts(&qp.chip_hdl.parts, &mut worklist, &mut done);
+    let mut worklist: Vec<&Chip> = Vec::new();
 
     // TODO: Instead of using the worklist we should just make one chip
     // and then traverse the chip. We are reinventing the wheel here
@@ -852,7 +860,8 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 
     let mut dedupe_pass = PortMapDedupe::new();
     let (chip_hdl, _) = &dedupe_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
-    let chip = Chip::new(
+
+    let top_level_chip = Chip::new(
         chip_hdl,
         ptr::null_mut(),
         &chip_hdl.provider,
@@ -860,14 +869,42 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
         &Vec::new(),
     )?;
 
-    let top_level_vhdl = VhdlEntity::try_from(chip)?;
+    worklist.push(&top_level_chip);
 
-    // TODO: traverse the tree of chips and run VhdlEntity::try_from CHIP on
-    // the components, that way we have fully resolved generics. We will need
-    // to create a converter from a chip. STILL use a worklist but the worklist
-    // is over the chips tree
+    while (!worklist.is_empty()) {
+        let chip = worklist.pop().unwrap();
 
-    //push_parts(&next_hdl.parts, &mut worklist, &mut done);
+        // If we have already processed this chip, skip it.
+        if done.contains(&chip.name) {
+            continue;
+        }
+
+        // Otherwise, add it to the set of chips we have processed.
+        done.insert(chip.name.clone());
+
+        // Add all the components in this chip to the worklist.
+        for chip_idx in chip.circuit.node_indices() {
+            let component_chip = &chip.circuit[chip_idx];
+            if &component_chip.name == "Nand" || &component_chip.name == "DFF" {
+                continue;
+            }
+            if &component_chip.name == "true" || &component_chip.name == "false" {
+                continue;
+            }
+            if chip_hdl.get_port(&component_chip.name).is_err(){
+                println!("Adding {} to worklist", component_chip.name);
+                worklist.push(component_chip);
+            }
+        }
+
+        // Create a VHDL entity for this chip.
+        let chip_vhdl: VhdlEntity = VhdlEntity::try_from(chip)?;
+
+        // Write the VHDL entity to a file.
+        let chip_filename = chip_vhdl.name.clone() + ".vhdl";
+        let mut file = File::create(qp.project_dir.join(&chip_filename))?;
+        file.write_all(format!("{}", chip_vhdl).as_bytes())?;
+    }
 
     Ok(())
 }

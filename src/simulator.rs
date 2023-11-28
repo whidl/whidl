@@ -171,7 +171,9 @@ pub struct Chip {
     pub hdl_provider: Rc<dyn HdlProvider>,
 
     // Values of variables (generics and iterators)
-    variables: HashMap<String, usize>,
+    pub variables: HashMap<String, usize>,
+
+    // Assignment statements.
     assignments: Vec<Assignment>,
 }
 

@@ -267,7 +267,8 @@ impl TryFrom<&TestBench> for VhdlEntity {
             statements,
             signals,
             optimization_info: Some(Rc::clone(&sequential_pass_info)),
-            chip,
+            chip_hdl: chip.hdl.as_ref().unwrap().clone(),
+            hdl_provider: chip.hdl_provider.clone(),
         })
     }
 }
@@ -341,7 +342,7 @@ pub fn synth_vhdl_test(output_dir: &Path, test_script_path: &Path) -> Result<(),
         true,
         &Vec::new(),
     )?;
-    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(chip)?;
+    let chip_vhdl: VhdlEntity = VhdlEntity::try_from(&chip)?;
 
     let quartus_dir = Path::new(&output_dir);
     let project = crate::vhdl::QuartusProject::new(hdl, chip_vhdl, quartus_dir.to_path_buf());
