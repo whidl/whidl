@@ -6,7 +6,6 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::fmt::Write;
-use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write as OtherWrite;
@@ -23,7 +22,6 @@ use crate::opt::sequential::SequentialPass;
 use crate::parser::*;
 use crate::simulator::infer_widths;
 use crate::simulator::Chip;
-use crate::Scanner;
 
 // ========= STRUCTS ========== //
 pub struct VhdlEntity {
@@ -245,8 +243,13 @@ impl fmt::Display for VhdlEntity {
         // Final VHDL generated for the top-level chip.
         writeln!(f, "entity {} is", keyw(&self.name))?;
 
-        for x in &self.generics {
-            writeln!(f, "{}", x)?;
+        // If there are any generics declared for this chip, then write them out.
+        if !&self.generics.is_empty() {
+            writeln!(f, "generic (")?;
+            for x in &self.generics {
+                writeln!(f, "{} : integer", x)?;
+            }
+            writeln!(f, ");")?;
         }
 
         let port_vec: Vec<String> = self.ports.iter().map(|x| keyw(&x.to_string())).collect();
@@ -706,7 +709,10 @@ impl QuartusProject {
 }
 
 pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> {
-    println!("Writing Quartus Prime project to {}", qp.project_dir.display());
+    println!(
+        "Writing Quartus Prime project to {}",
+        qp.project_dir.display()
+    );
     let mut tcl = format!("project_new {} -overwrite\n", &qp.chip_vhdl.name);
 
     let tcl_boilerplate = r#"
@@ -1027,11 +1033,6 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
     // Worklist is set of chip names that we need to convert from HDL to VHDL.
     let mut worklist: Vec<&Chip> = Vec::new();
 
-    // TODO: Instead of using the worklist we should just make one chip
-    // and then traverse the chip. We are reinventing the wheel here
-    // that is Simulator::elaborate
-    let base_path = qp.chip_hdl.path.as_ref().unwrap().parent().unwrap();
-
     let mut dedupe_pass = PortMapDedupe::new();
     let (chip_hdl, _) = &dedupe_pass.apply(&qp.chip_hdl, &qp.chip_hdl.provider)?;
 
@@ -1045,7 +1046,7 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
 
     worklist.push(&top_level_chip);
 
-    while (!worklist.is_empty()) {
+    while !worklist.is_empty() {
         let chip = worklist.pop().unwrap();
 
         // If we have already processed this chip, skip it.
@@ -1065,7 +1066,7 @@ pub fn write_quartus_project(qp: &QuartusProject) -> Result<(), Box<dyn Error>> 
             if &component_chip.name == "true" || &component_chip.name == "false" {
                 continue;
             }
-            if chip_hdl.get_port(&component_chip.name).is_err(){
+            if chip_hdl.get_port(&component_chip.name).is_err() {
                 worklist.push(component_chip);
             }
         }
