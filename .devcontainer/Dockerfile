@@ -3,26 +3,16 @@ FROM mcr.microsoft.com/vscode/devcontainers/base:0-${VARIANT}
 
 # Base
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends build-essential
-
-# Java for nand2tetris
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends openjdk-11-jdk-headless
-
-# From the vs code rust container
-# https://github.com/microsoft/vscode-dev-containers/blob/main/containers/rust/.devcontainer/library-scripts/rust-debian.sh
-COPY library-scripts/*.sh library-scripts/*.env /tmp/library-scripts/
-RUN bash /tmp/library-scripts/rust-debian.sh "${CARGO_HOME}" "${RUSTUP_HOME}" "${USERNAME}" "true" "true" \
-    && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts
+    && apt-get -y install --no-install-recommends build-essential unzip vim-nox
 
 # Quartus Prime
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends libtcmalloc-minimal4
+    && apt-get -y install --no-install-recommends libtcmalloc-minimal4 libglib2.0-0
 ENV PATH="/opt/intelFPGA_lite/quartus/bin:/opt/intelFPGA_lite/modelsim_ase/bin:${PATH}"
 
 RUN chown vscode /opt
-
 USER vscode
+
 RUN cd /tmp \
    && wget https://downloads.intel.com/akdlm/software/acdsinst/20.1std.1/720/ib_installers/QuartusLiteSetup-20.1.1.720-linux.run \
    && wget https://downloads.intel.com/akdlm/software/acdsinst/20.1std.1/720/ib_installers/ModelSimSetup-20.1.1.720-linux.run \
@@ -31,14 +21,8 @@ RUN cd /tmp \
    && ./QuartusLiteSetup-20.1.1.720-linux.run --mode unattended --accept_eula 1 --installdir /opt/intelFPGA_lite \
    && rm *.run
 
-COPY library-scripts/nvm.sh /tmp/library-scripts/
-RUN bash /tmp/library-scripts/nvm.sh 
+# From the vs code rust container
+COPY library-scripts/*.sh /tmp/library-scripts/
+RUN sudo bash /tmp/library-scripts/modelsim.sh
 
-USER root
-COPY library-scripts/modelsim.sh /tmp/library-scripts/
-RUN bash /tmp/library-scripts/modelsim.sh 
 
-USER vscode
-ENV CARGO_HOME /usr/local/cargo
-ENV RUSTUP_HOME /usr/local/rustup
-RUN /usr/local/cargo/bin/cargo install wasm-pack
